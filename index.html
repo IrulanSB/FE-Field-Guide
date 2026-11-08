@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1116">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FE7">
+<title>FE7 Field Guide</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="head">
+<header class="topbar">
+  <div class="brand">
+    <span class="crest">◆</span>
+    <span class="brandText">FE7 <em>Field Guide</em></span>
+  </div>
+  <button class="runChip" id="runChip" aria-label="Switch run"></button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="chapters" class="active">Chapters</button>
+  <button data-tab="recruits">Recruits</button>
+  <button data-tab="items">Items</button>
+  <button data-tab="gaidens">Gaidens</button>
+  <button data-tab="supports">Supports</button>
+  <button data-tab="roster">Roster</button>
+  <button data-tab="team">Team</button>
+  <button data-tab="audit">Audit</button>
+  <button data-tab="search">Search</button>
+  <button data-tab="strategy">Strategy</button>
+</nav>
+</div>
+
+<main id="app" class="app"></main>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheetBack" data-close></div>
+  <div class="sheetCard" role="dialog" aria-modal="true">
+    <div class="sheetHead">
+      <h2 id="sheetTitle"></h2>
+      <button class="iconBtn" data-close aria-label="Close">✕</button>
+    </div>
+    <div id="sheetBody" class="sheetBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="data-fe7.js"></script>
+<script src="data-supports.js"></script>
+<script src="data-fe8.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

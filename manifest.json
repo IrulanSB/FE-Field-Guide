@@ -1,0 +1,15 @@
+{
+  "name": "FE7 Field Guide",
+  "short_name": "FE7",
+  "description": "Complete chapter, recruit, item, gaiden and support checklist for Fire Emblem: The Blazing Blade.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1116",
+  "theme_color": "#0E1116",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
