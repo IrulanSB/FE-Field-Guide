@@ -29,10 +29,10 @@
   <p>Paste the address where you deployed the app. The QR code below opens it on your phone.</p>
 
   <div class="card">
-    <input id="url" placeholder="https://yourname.github.io/fe7/" autocomplete="off">
+    <input id="url" value="https://irulansb.github.io/FE-Field-Guide/" autocomplete="off">
     <button id="go">Make QR</button>
-    <img id="qr" alt="QR code" hidden>
-    <p class="muted" id="hint">Tip: you can also open this page as <code>install.html#https://yourname.github.io/fe7/</code></p>
+    <img id="qr" alt="QR code" src="qr.png">
+    <p class="muted" id="hint">Scan this with your iPhone camera. To use a different address, edit the field and tap Make QR.</p>
   </div>
 
   <div class="card">
@@ -55,19 +55,22 @@
   <p class="muted">If the icon shows a screenshot or a plain page instead of the app, you opened it in a normal tab rather than from the home screen. Delete it and re-add from Safari.</p>
 </div>
 <script>
+  const DEFAULT_URL = "https://irulansb.github.io/FE-Field-Guide/";
   const input = document.getElementById("url");
   const qr = document.getElementById("qr");
   if (location.hash.length > 1) input.value = decodeURIComponent(location.hash.slice(1));
   function make() {
     const u = input.value.trim();
     if (!u) return;
-    qr.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(u);
+    qr.src = u === DEFAULT_URL
+      ? "qr.png"
+      : "https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=8&data=" + encodeURIComponent(u);
     qr.hidden = false;
     history.replaceState(null, "", "#" + encodeURIComponent(u));
   }
   document.getElementById("go").addEventListener("click", make);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") make(); });
-  if (input.value) make();
+  make();
 </script>
 </body>
 </html>

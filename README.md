@@ -1,5 +1,7 @@
 # FE7 Field Guide
 
+**Live: https://irulansb.github.io/FE-Field-Guide/**
+
 A phone-first, offline checklist and strategy guide for **Fire Emblem: The Blazing Blade** (FE7, GBA, 2003).
 
 Built because the game silently deletes content: gaidens expire on turn limits, recruits walk off the map, the Member Card gets carried away by a thief, and the support system quietly caps every unit at five levels.
@@ -21,11 +23,13 @@ Built because the game silently deletes content: gaidens expire on turn limits, 
 
 ## Deploy
 
-1. Create a GitHub repository (e.g. `fe7`).
+This repo is already deployed. To rebuild from a fork:
+
+1. Create a GitHub repository.
 2. Upload every file in this folder to the repository root.
 3. Repo → **Settings → Pages** → Source: **Deploy from a branch**, Branch: `main`, folder `/ (root)`.
 4. Wait a minute. Your URL is `https://<username>.github.io/<repo>/`.
-5. Open `install.html`, paste that URL, and scan the QR code with your phone.
+5. Open `install.html`; it shows a QR code for the default URL, or paste yours and tap **Make QR**.
 
 No build step, no dependencies, no server.
 
@@ -49,6 +53,7 @@ No build step, no dependencies, no server.
 | `sw.js` | Offline cache. **Bump `CACHE` after editing content.** |
 | `manifest.json` | Home-screen metadata |
 | `icon.svg`, `icon-180.png` | App icon |
+| `qr.png` | QR code for the live URL |
 | `install.html` | QR + install steps |
 
 ## Data accuracy
