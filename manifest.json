@@ -1,7 +1,7 @@
 {
-  "name": "FE7 Field Guide",
-  "short_name": "FE7",
-  "description": "Complete chapter, recruit, item, gaiden and support checklist for Fire Emblem: The Blazing Blade.",
+  "name": "Fire Emblem Field Guide",
+  "short_name": "FE Guide",
+  "description": "Complete chapter, recruit, item, gaiden and support checklists for Fire Emblem: The Blazing Blade and The Sacred Stones.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

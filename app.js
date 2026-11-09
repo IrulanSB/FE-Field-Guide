@@ -2,43 +2,81 @@
 (function () {
   "use strict";
 
-  var DATA = window.FE7;
-  var SUPP = window.FE7_SUPPORTS || [];
-  var LSKEY = "fe7fg.v2";
-  var TABS = ["chapters", "recruits", "items", "gaidens", "supports", "roster", "team", "audit", "search", "strategy"];
+  var GAMES = [window.FE7, window.FE8, window.FE9].filter(Boolean);
+  var DATA = GAMES[0];
+  var LSKEY = "fe7fg.v3";
+  var TABS = ["chapters", "recruits", "items", "gaidens", "supports", "roster", "team", "audit", "search", "exploits", "strategy"];
   var KIND_LABEL = { recruit: "Recruit", village: "Village", chest: "Chest", drop: "Drop", item: "Found", shop: "Secret shop", ruin: "Ruins", event: "Event" };
-  var BOOSTERS = ["Angelic Robe", "Energy Ring", "Secret Book", "Speedwings", "Goddess Icon", "Dragonshield", "Talisman", "Boots", "Body Ring", "Afa's Drops"];
+  var BOOSTERS = ["Angelic Robe", "Energy Ring", "Secret Book", "Speedwings", "Goddess Icon", "Dragonshield", "Talisman", "Boots", "Swiftsole", "Body Ring", "Afa's Drops", "Metis's Tome"];
+
+  function gameById(id) {
+    for (var i = 0; i < GAMES.length; i++) if (GAMES[i].id === id) return GAMES[i];
+    return GAMES[0];
+  }
+  function setGame(id) {
+    state.game = id || "fe7";
+    DATA = gameById(state.game);
+  }
+  function switchGame(id) {
+    if (!GAMES.some(function (g) { return g.id === id; })) return;
+    state.lastRun[state.game] = state.active;
+    setGame(id);
+    var cand = state.lastRun[id];
+    var mine = state.runs.filter(function (r) { return r.game === id; });
+    if (!cand || !mine.some(function (r) { return r.id === cand; })) cand = mine.length ? mine[mine.length - 1].id : null;
+    state.active = cand;
+    state.ui.sel = null;
+    save(); render();
+  }
 
   /* ---------------- state ---------------- */
   var state = load();
   var pendingClose = null;
-  if (!state || !state.runs) state = { runs: [], active: null, ui: { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" } };
+  if (!state || !state.runs) state = { runs: [], active: null, game: "fe7", lastRun: {}, ui: { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" } };
   if (!state.ui) state.ui = { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" };
+  if (!state.game) state.game = "fe7";
+  if (!state.lastRun) state.lastRun = {};
   migrate();
+  setGame(state.game);
+  if (!state.active || !state.runs.filter(function (r) { return r.id === state.active && r.game === state.game; }).length) {
+    state.active = state.lastRun[state.game] || null;
+  }
 
   function load() {
-    try { return JSON.parse(localStorage.getItem(LSKEY)); } catch (e) { return null; }
+    try {
+      var raw = localStorage.getItem(LSKEY) || localStorage.getItem("fe7fg.v2");
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
   }
   function save() {
     try { localStorage.setItem(LSKEY, JSON.stringify(state)); } catch (e) { toast("Could not save — storage full or blocked"); }
   }
   function uid() { return Math.random().toString(36).slice(2, 9); }
 
-  function newRun(name, mode, diff) {
+  function newRun(name, mode, diff, game) {
+    var g = game || state.game || "fe7";
+    var gm = gameById(g);
+    var first = chaptersFor(mode)[0] || gm.chapters[0];
     return {
-      id: uid(), name: name || "New run", mode: mode, diff: diff || "Normal",
-      created: Date.now(), chapterId: firstChapter(mode).id,
-      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}
+      id: uid(), name: name || "New run", mode: mode, diff: diff || "Normal", game: g,
+      created: Date.now(), chapterId: first ? first.id : "",
+      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}, levels: {}, promos: {}
     };
   }
   function migrate() {
     state.runs.forEach(function (r) {
+      r.game = r.game || "fe7";
       r.checked = r.checked || {}; r.turns = r.turns || {}; r.notes = r.notes || {};
       r.roster = r.roster || {}; r.team = r.team || []; r.boosters = r.boosters || {};
       r.branches = r.branches || {}; r.reached = r.reached || {}; r.supports = r.supports || {};
+      r.levels = r.levels || {}; r.promos = r.promos || {};
     });
   }
-  function run() { return state.runs.filter(function (r) { return r.id === state.active; })[0] || null; }
+  function run() {
+    var found = state.runs.filter(function (r) { return r.id === state.active; })[0];
+    if (found && found.game !== state.game) return null;
+    return found || null;
+  }
 
   /* ---------------- data helpers ---------------- */
   function chaptersFor(mode) {
@@ -47,14 +85,21 @@
   }
   function chById(id) {
     for (var i = 0; i < DATA.chapters.length; i++) if (DATA.chapters[i].id === id) return DATA.chapters[i];
+    var d = DATA.dungeons || [];
+    for (var j = 0; j < d.length; j++) if (d[j].id === id) return d[j];
     return null;
   }
-  function firstChapter(mode) { return chaptersFor(mode)[0]; }
+  function firstChapter(mode) { return chaptersFor(mode)[0] || null; }
   function orderIndex(mode, id) { return (DATA.order[mode] || []).indexOf(id); }
   function before(mode, aId, bId) { return orderIndex(mode, aId) < orderIndex(mode, bId); }
   function unitById(id) {
     for (var i = 0; i < DATA.units.length; i++) if (DATA.units[i].id === id) return DATA.units[i];
     return null;
+  }
+  function supportsFor() {
+    if (DATA.id === "fe8") return (window.FE8_SUPPORTS && window.FE8_SUPPORTS.pairs) || [];
+    if (DATA.id === "fe7") return window.FE7_SUPPORTS || [];
+    return [];
   }
   function unitByName(name) {
     var n = String(name).toLowerCase();
@@ -69,7 +114,29 @@
     return "https://fireemblemwiki.org/w/index.php?search=" + encodeURIComponent(ch.title);
   }
 
+  function exploitsFor(ch) {
+    return (DATA.exploits || []).filter(function (e) { return (e.chapters || []).indexOf(ch.id) >= 0; });
+  }
+
+  function campaignBars(r) {
+    if (DATA.id !== "fe7") return "";
+    var modes = r.mode === "hector" ? ["hector"] : ["lyn", "eliwood"];
+    var rows = "";
+    modes.forEach(function (m) {
+      var list = chaptersFor(m);
+      var d = 0, t = 0;
+      list.forEach(function (c) { var p = progress(c, r); d += p.done; t += p.total; });
+      var pct = t ? Math.round(d / t * 100) : 0;
+      rows += '<div class="camp"><span class="k">' + esc(modeName(m)) + '</span>' +
+        '<span class="bar"><i style="width:' + pct + '%"></i></span>' +
+        '<span class="n">' + d + "/" + t + '</span></div>';
+    });
+    return '<div class="campaign">' + rows + '</div>';
+  }
+
   function itemKey(ch, i) { return ch.id + ":" + i; }
+
+
 
   function diffHidden(it, r) {
     if (!r || !it.d) return false;
@@ -112,7 +179,7 @@
   }
   function progress(ch, r) {
     var list = branchFilter(ch, r);
-    if (!list.length) return { done: 1, total: 1, pct: 100, loss: false, assumed: 0 };
+    if (!list.length) return { done: 0, total: 0, pct: 0, assumed: 0 };
     var d = 0, a = 0;
     list.forEach(function (x) {
       var st = checkState(r, ch, x.i);
@@ -160,20 +227,34 @@
   var toastEl = document.getElementById("toast");
   var toastTimer;
 
-  function toast(msg) {
-    toastEl.textContent = msg;
+  function toast(msg, actionLabel, actionFn) {
+    toastEl.innerHTML = "";
+    var span = document.createElement("span");
+    span.textContent = msg;
+    toastEl.appendChild(span);
+    if (actionLabel) {
+      var b = document.createElement("button");
+      b.textContent = actionLabel;
+      b.addEventListener("click", function () {
+        toastEl.hidden = true;
+        if (actionFn) actionFn();
+      });
+      toastEl.appendChild(b);
+    }
     toastEl.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 2200);
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, actionLabel ? 6000 : 2200);
   }
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
   function render() {
+    setGame(state.game);
     var r = run();
+    renderGames();
     document.getElementById("runChip").innerHTML = r
-      ? "<b>" + esc(r.name) + "</b> · " + esc(modeName(r.mode)) + " " + esc(r.diff)
+      ? "<b>" + esc(r.name) + "</b>"
       : "No run";
     if (!r) { app.innerHTML = welcome(); return; }
     document.querySelectorAll("#tabs button").forEach(function (b) {
@@ -191,6 +272,7 @@
         case "team": html = viewTeam(r); break;
         case "audit": html = viewAudit(r); break;
         case "search": html = viewSearch(r); break;
+        case "exploits": html = viewExploits(r); break;
         case "strategy": html = viewStrategy(); break;
         default: html = viewChapters(r);
       }
@@ -201,21 +283,42 @@
     document.body.classList.toggle("detail-mode", state.ui.tab === "chapters" && !!state.ui.sel);
   }
 
+  function renderGames() {
+    var el = document.getElementById("games");
+    if (!el) return;
+    el.innerHTML = GAMES.map(function (g) {
+      var ready = g.ready !== false && g.chapters && g.chapters.length;
+      return '<button data-game="' + g.id + '" class="' + (state.game === g.id ? "on" : "") + (ready ? "" : " off") + '">' + esc(g.short) + '</button>';
+    }).join("");
+  }
+
   function modeName(m) { for (var i = 0; i < DATA.modes.length; i++) if (DATA.modes[i].id === m) return DATA.modes[i].name; return m; }
 
   function welcome() {
+    if (DATA.ready === false || !DATA.chapters.length) {
+      return (
+        '<div class="card pad stack" style="max-width:520px;margin:30px auto">' +
+        '<div class="kicker">' + esc(DATA.short) + '</div>' +
+        '<h2 class="title">' + esc(DATA.title) + '</h2>' +
+        '<p class="muted small">This slot is wired up with the same schema as ' + esc(GAMES[0].short) + ' and ' + esc(GAMES[1] ? GAMES[1].short : "") + ', but the data has not been written yet.</p>' +
+        '<button class="btn" data-act="game" data-id="fe7">Back to FE7</button>' +
+        '</div>'
+      );
+    }
+    var defMode = DATA.id === "fe8" ? "eirika" : "eliwood";
+    var defName = DATA.short + " " + (DATA.id === "fe8" ? "Eirika" : "Eliwood");
     return (
       '<div class="card pad stack" style="max-width:520px;margin:30px auto">' +
-      '<div class="kicker">Fire Emblem 7</div>' +
-      '<h2 class="title">The Blazing Blade, tracked properly.</h2>' +
-      '<p class="muted small">Every chapter, recruit, chest, village, gaiden, secret shop and support pair — with turn-limit checks and an audit that tells you what you may have missed.</p>' +
+      '<div class="kicker">' + esc(DATA.title) + '</div>' +
+      '<h2 class="title">' + esc(DATA.short) + ', tracked properly.</h2>' +
+      '<p class="muted small">Every chapter, recruit, chest, village, gaiden, secret shop and support pair — with turn-limit checks, auto-advance and an audit that tells you what you may have missed.</p>' +
       '<hr class="sep">' +
       '<div class="kicker">Start a run</div>' +
       '<label class="small muted">Name</label>' +
-      '<input class="search" id="newName" value="Eliwood Normal" />' +
+      '<input class="search" id="newName" value="' + esc(defName) + '" />' +
       '<div class="row" style="gap:8px">' +
       '<select class="search" id="newMode" style="flex:1">' +
-      DATA.modes.map(function (m) { return '<option value="' + m.id + '"' + ((state.ui.lastMode || "eliwood") === m.id ? " selected" : "") + '>' + m.name + '</option>'; }).join("") +
+      DATA.modes.map(function (m) { return '<option value="' + m.id + '"' + ((state.ui.lastMode || defMode) === m.id ? " selected" : "") + '>' + m.name + '</option>'; }).join("") +
       '</select>' +
       '<select class="search" id="newDiff" style="width:130px">' +
       '<option>Normal</option><option>Hard</option>' +
@@ -245,23 +348,38 @@
         '</div>';
     }
 
+    html += campaignBars(r);
     html += '<div class="split' + (state.ui.sel ? " detailOpen" : "") + '">';
     /* list */
     html += '<div class="chlist"><div class="chhead"><span class="h">' + esc(modeName(r.mode)) + ' · ' + list.length + ' chapters</span>' +
       '<button class="btn ghost" data-act="catchup" style="min-height:32px;padding:0 10px;font-size:12px">Catch up</button></div>';
     list.forEach(function (ch) {
       var p = progress(ch, r);
-      var cls = p.done >= p.total ? (p.assumed ? "assumed" : "full") : p.done > 0 ? "part" : "";
+      var cls = p.total === 0 ? "" : p.done >= p.total ? (p.assumed ? "assumed" : "full") : p.done > 0 ? "part" : "";
       if (gaidenLost(ch, r) || (turnLimitApplies(ch, r) && r.turns[ch.id] > ch.turn.limit)) cls = "lost";
       var sel = state.ui.sel === ch.id ? " sel" : "";
       var tag = ch.gaiden ? '<span class="tag miss">G</span>' : "";
+      var ex = exploitsFor(ch).length ? '<span class="tag exploit">⚡</span>' : "";
       html += '<div class="ch"><button class="chrow' + sel + '" data-act="open-ch" data-id="' + ch.id + '">' +
         '<span class="num">' + esc(numFor(ch, r.mode)) + '</span>' +
-        '<span class="nm">' + esc(ch.title) + '</span>' + tag +
-        '<span class="pr' + (p.done >= p.total ? " full" : "") + '">' + p.done + "/" + p.total + (p.assumed ? " ~" : "") + '</span>' +
+        '<span class="nm">' + esc(ch.title) + '</span>' + tag + ex +
+        '<span class="pr' + (p.total && p.done >= p.total ? " full" : "") + '">' + (p.total ? p.done + "/" + p.total + (p.assumed ? " ~" : "") : "—") + '</span>' +
         '<span class="dot ' + cls + '"></span>' +
         '</button></div>';
     });
+    if (DATA.dungeons && DATA.dungeons.length) {
+      html += '<div class="chhead" style="padding-top:16px"><span class="h">Post-game</span></div>';
+      DATA.dungeons.forEach(function (ch) {
+        var p = progress(ch, r);
+        var sel = state.ui.sel === ch.id ? " sel" : "";
+        html += '<div class="ch"><button class="chrow' + sel + '" data-act="open-ch" data-id="' + ch.id + '">' +
+          '<span class="num">' + esc(ch.num) + '</span>' +
+          '<span class="nm">' + esc(ch.title.replace(/^(Tower of Valni|Lagdou Ruins) — /, "")) + '</span>' +
+          '<span class="pr">' + (p.total ? p.done + "/" + p.total : "—") + '</span>' +
+          '<span class="dot ' + (p.total === 0 ? "" : p.done >= p.total ? "full" : p.done ? "part" : "") + '"></span>' +
+          '</button></div>';
+      });
+    }
     html += '</div>';
 
     /* detail */
@@ -331,6 +449,17 @@
     if (ch.warnings && ch.warnings.length) {
       h += '<div class="sect"><div class="sectH"><h4>Watch out</h4></div>';
       ch.warnings.forEach(function (w) { h += '<div class="small" style="color:#DFAE5C;padding:4px 0">⚠ ' + esc(w) + '</div>'; });
+      h += '</div>';
+    }
+
+    var exs = exploitsFor(ch);
+    if (exs.length) {
+      h += '<div class="sect"><div class="sectH"><h4>Exploits available here</h4></div>';
+      exs.forEach(function (e, n) {
+        h += '<div class="auditRow"><div style="flex:1"><div style="font-size:13.5px">⚡ ' + esc(e.name) + '</div>' +
+          '<div class="tiny muted">' + esc(e.what) + '</div></div>' +
+          '<button class="btn ghost small go" data-act="exploit" data-i="' + DATA.exploits.indexOf(e) + '">Steps</button></div>';
+      });
       h += '</div>';
     }
 
@@ -466,11 +595,11 @@
       var played = !!r.reached[ch.id];
       var req = ch.req || "Check the previous chapter's conditions.";
       h += '<div class="u" style="align-items:flex-start;flex-direction:column;gap:6px">' +
-        '<div class="spread" style="width:100%"><div class="row"><span class="tag ' + (lost ? "lost" : played ? "rec" : "miss") + '">' + (lost ? "Lost" : played ? "Played" : "Optional") + '</span>' +
+        '<div class="spread" style="width:100%"><div class="row"><span class="tag ' + (lost ? "lost" : played ? "rec" : "miss") + '">' + (lost ? "Lost" : played ? "Played" : ch.mandatory ? "Mandatory" : "Optional") + '</span>' +
         '<b style="font-size:14px">' + esc(numFor(ch, r.mode)) + ' ' + esc(ch.title) + '</b></div>' +
         '<button class="btn ghost small" data-act="jump" data-id="' + ch.id + '" style="min-height:30px;padding:0 9px">Open</button></div>' +
         '<div class="small muted">' + esc(req) + '</div>' +
-        (!played && !lost ? '<button class="btn small" data-act="mark-reached" data-id="' + ch.id + '">I played this</button>' : "") +
+        (!played && !lost && !ch.mandatory ? '<button class="btn small" data-act="mark-reached" data-id="' + ch.id + '">I played this</button>' : "") +
         '</div>';
     });
     h += '</div>';
@@ -493,7 +622,8 @@
     var recSet = {};
     DATA.units.forEach(function (u) { if (u.tier === "S" || u.tier === "A") recSet[u.id] = true; });
 
-    var pairs = SUPP.filter(function (p) {
+    var all = supportsFor();
+    var pairs = all.filter(function (p) {
       if (f === "rec") return recSet[p.a] && recSet[p.b];
       if (f === "avail") return avail[p.a] && avail[p.b];
       return true;
@@ -555,8 +685,9 @@
   }
   function pairKey(a, b) { return [a, b].sort().join("|"); }
   function findPair(a, b) {
-    for (var i = 0; i < SUPP.length; i++) {
-      var p = SUPP[i];
+    var list = supportsFor();
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
       if ((p.a === a && p.b === b) || (p.a === b && p.b === a)) return p;
     }
     return null;
@@ -597,11 +728,12 @@
     h += '<div class="ulist">';
     units.forEach(function (u) {
       var st = r.roster[u.id] || "";
+      var meta = u.cls + (r.levels[u.id] ? " · Lv " + r.levels[u.id] : "") + (r.promos[u.id] ? " · " + r.promos[u.id] : "");
       var label = st === "core" ? '<span class="tag rec">Core</span>' : st === "bench" ? '<span class="tag">Bench</span>' : st === "dead" ? '<span class="tag lost">Dead</span>' : '<span class="tag">Not set</span>';
       h += '<div class="u t-' + u.tier.toLowerCase() + (st === "dead" ? " dead" : "") + '" data-act="unit" data-u="' + u.id + '">' +
         '<div class="badge">' + esc(initials(u.name)) + '</div>' +
         '<div style="flex:1;min-width:0"><div class="nm">' + esc(u.name) + '</div>' +
-        '<div class="sub">' + esc(u.cls) + '</div></div>' +
+        '<div class="sub">' + esc(meta) + '</div></div>' +
         '<div class="right">' + label + '<div class="tiny dim" style="margin-top:4px">' + esc(u.tier) + '</div></div>' +
         '</div>';
     });
@@ -612,6 +744,13 @@
   /* ---------------- team ---------------- */
   function promoItem(u) {
     var c = u.cls.split("→")[0].trim();
+    if (DATA.id === "fe8") {
+      if (/Journeyman|Recruit|Pupil|Trainee/.test(c)) return "Trainee seal";
+      if (u.id === "eirika") return "Solar Brace";
+      if (u.id === "ephraim") return "Lunar Brace";
+      if (!u.promos || !u.promos.length) return "—";
+      return "Master Seal";
+    }
     if (/Cavalier|Knight/.test(c)) return "Knight Crest";
     if (/Mercenary|Myrmidon|Fighter/.test(c)) return "Hero Crest";
     if (/Mage|Monk|Shaman|Cleric|Troubadour/.test(c)) return "Guiding Ring";
@@ -630,7 +769,10 @@
       if (it === "—") return;
       (byItem[it] = byItem[it] || []).push(u);
     });
-    var conflicts = Object.keys(byItem).filter(function (k) { return byItem[k].length > 1; });
+    var conflicts = Object.keys(byItem).filter(function (k) {
+      if (k === "Master Seal" || k === "Trainee seal") return false;
+      return byItem[k].length > 1;
+    });
 
     var h = '<div class="kicker">Team planner</div><h2 class="title" style="margin-bottom:2px">' + core.length + ' of 12</h2>' +
       '<p class="muted small" style="margin-bottom:12px">Pick your core in Roster, then set a unit to Core. Promotion needs and booster assignments are tracked here.</p>';
@@ -643,11 +785,13 @@
     h += '<div class="ulist">';
     core.forEach(function (u) {
       var need = promoItem(u);
-      var warn = byItem[need] && byItem[need].length > 1;
+      var chosen = r.promos[u.id];
+      var warn = byItem[need] && byItem[need].length > 1 && need !== "Master Seal" && need !== "Trainee seal";
       h += '<div class="slot" data-act="unit" data-u="' + u.id + '">' +
         '<div class="badge" style="width:26px;height:26px;border-radius:7px;display:grid;place-items:center;background:var(--gold);color:#171307;font-size:11px;font-weight:700">' + esc(initials(u.name)) + '</div>' +
-        '<div style="flex:1"><div class="nm" style="font-size:13.5px">' + esc(u.name) + '</div><div class="tiny muted">' + esc(u.cls) + '</div></div>' +
-        '<span class="need' + (warn ? " warn" : "") + '">' + esc(need) + '</span></div>';
+        '<div style="flex:1"><div class="nm" style="font-size:13.5px">' + esc(u.name) + (r.levels[u.id] ? ' <span class="tiny dim">Lv ' + r.levels[u.id] + '</span>' : "") + '</div>' +
+        '<div class="tiny muted">' + esc(chosen || u.cls) + '</div></div>' +
+        '<span class="need' + (warn ? " warn" : "") + '">' + esc(chosen || need) + '</span></div>';
     });
     if (!core.length) h += '<div class="empty"><b>No core yet</b>Open Roster and set a few units to Core.</div>';
     h += '</div>';
@@ -802,18 +946,81 @@
     s.mechanics.forEach(function (m) { h += '<p><b style="color:var(--text)">' + esc(m.h) + '.</b> ' + esc(m.p) + '</p>'; });
 
     h += '<h3>Mistakes to avoid</h3><ul>' +
-      "<li>Benching Marcus because he is pre-promoted. He is your best unit for ten chapters.</li>" +
-      "<li>Training everyone. Pick 10–12 and feed them.</li>" +
-      "<li>Using steel and silver for everything. Iron is accurate and cheap.</li>" +
-      "<li>Ignoring weapon weight — it silently removes your doubles.</li>" +
-      "<li>Letting a thief leave with the Member Card, a promotion seal, or a chest item.</li>" +
-      "<li>Killing a recruitable enemy before checking the recruit list.</li>" +
-      "<li>Rushing the turn-limited chapters without checking the timer.</li>" +
+      (DATA.id === "fe8"
+        ? "<li>Ignoring Seth. He can carry the first ten chapters almost alone.</li>" +
+          "<li>Skipping the villages in Ch.5 — the Guiding Ring needs all four.</li>" +
+          "<li>Paying 9,980G to Eirika's Rennac instead of talking with L'Arachel.</li>" +
+          "<li>Forgetting the sand items in Ch.15. Warp and the Silver Card are buried there.</li>" +
+          "<li>Letting civilians die in Ch.6 or Ch.17 and losing the reward.</li>" +
+          "<li>Promoting a trainee before level 10, or forgetting they promote twice.</li>"
+        : "<li>Benching Marcus because he is pre-promoted. He is your best unit for ten chapters.</li>" +
+          "<li>Training everyone. Pick 10–12 and feed them.</li>" +
+          "<li>Using steel and silver for everything. Iron is accurate and cheap.</li>" +
+          "<li>Ignoring weapon weight — it silently removes your doubles.</li>" +
+          "<li>Letting a thief leave with the Member Card, a promotion seal, or a chest item.</li>" +
+          "<li>Killing a recruitable enemy before checking the recruit list.</li>" +
+          "<li>Rushing the turn-limited chapters without checking the timer.</li>") +
       '</ul></div>';
     return h;
   }
 
-  /* ---------------- sheets ---------------- */
+  /* ---------------- exploits ---------------- */
+  function riskClass(r) {
+    var s = String(r || "").toLowerCase();
+    if (s === "high") return "high";
+    if (s === "medium") return "medium";
+    if (s === "low") return "low";
+    return "none";
+  }
+  function exploitCard(e) {
+    var h = '<div class="exCard"><div class="row spread" style="align-items:flex-start">' +
+      '<div><h3>' + esc(e.name) + '</h3><div class="tiny muted">' + esc(e.what) + '</div></div>' +
+      '<span class="risk ' + riskClass(e.risk) + '">' + esc(e.risk || "none") + '</span></div>';
+    if (e.steps && e.steps.length) {
+      h += '<ol>' + e.steps.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + '</ol>';
+    }
+    if (e.warn) h += '<div class="warn">⚠ ' + esc(e.warn) + '</div>';
+    if (e.video) h += '<div style="margin-top:8px"><a class="tiny" href="' + esc(e.video) + '" target="_blank" rel="noopener">Watch a demonstration →</a></div>';
+    h += '</div>';
+    return h;
+  }
+  function viewExploits(r) {
+    var list = DATA.exploits || [];
+    var f = state.ui.exFilter || "all";
+    var shown = list.filter(function (e) {
+      if (f === "tactic") return e.cat === "tactic";
+      if (f === "glitch") return e.cat !== "tactic";
+      if (f === "emulator") return e.cat === "emulator";
+      return true;
+    });
+    var h = '<div class="kicker">Exploits</div><h2 class="title" style="margin-bottom:2px">' + esc(DATA.short) + ' cheese</h2>' +
+      '<p class="muted small" style="margin-bottom:12px">Legal tactics and genuine glitches, separated. Risk ratings are about your save, not your honour.</p>';
+    h += '<div class="filters">' +
+      [["all", "All"], ["tactic", "Legit tactics"], ["glitch", "Glitches"], ["emulator", "Emulator"]].map(function (x) {
+        return '<button class="' + (f === x[0] ? "on" : "") + '" data-act="ex-filter" data-v="' + x[0] + '">' + x[1] + '</button>';
+      }).join("") + '</div>';
+    if (!shown.length) return h + '<div class="empty"><b>Nothing here</b>Try another filter.</div>';
+    var tactics = shown.filter(function (e) { return e.cat === "tactic"; });
+    var glitches = shown.filter(function (e) { return e.cat !== "tactic"; });
+    if (tactics.length) {
+      h += '<div class="sect"><div class="sectH"><h4>Legit but optimal</h4></div>';
+      tactics.forEach(function (e) { h += exploitCard(e); });
+      h += '</div>';
+    }
+    if (glitches.length) {
+      h += '<div class="sect"><div class="sectH"><h4>Glitches &amp; emulator tricks</h4></div>';
+      glitches.forEach(function (e) { h += exploitCard(e); });
+      h += '</div>';
+    }
+    return h;
+  }
+  function exploitSheet(i) {
+    var e = (DATA.exploits || [])[i];
+    if (!e) return;
+    openSheet(e.name, '<div class="stack">' + exploitCard(e) + '</div>');
+  }
+
+
   function openSheet(title, body) {
     document.getElementById("sheetTitle").textContent = title;
     document.getElementById("sheetBody").innerHTML = body;
@@ -847,11 +1054,13 @@
   }
 
   function newRunSheet() {
+    var dm = DATA.id === "fe8" ? "eirika" : "eliwood";
     openSheet("New run",
       '<div class="stack">' +
-      '<div><div class="kicker">Name</div><input class="search" id="nName" value="' + esc(modeName(state.ui.lastMode || "eliwood")) + ' run"></div>' +
+      '<div class="tiny muted">' + esc(DATA.title) + '</div>' +
+      '<div><div class="kicker">Name</div><input class="search" id="nName" value="' + esc(DATA.short + " " + (DATA.id === "fe8" ? "Eirika" : "Eliwood")) + '"></div>' +
       '<div class="row" style="gap:8px"><div style="flex:1"><div class="kicker">Mode</div>' +
-      '<select class="search" id="nMode">' + DATA.modes.map(function (m) { return '<option value="' + m.id + '"' + ((state.ui.lastMode || "eliwood") === m.id ? " selected" : "") + '>' + m.name + '</option>'; }).join("") + '</select></div>' +
+      '<select class="search" id="nMode">' + DATA.modes.map(function (m) { return '<option value="' + m.id + '"' + ((state.ui.lastMode || dm) === m.id ? " selected" : "") + '>' + m.name + '</option>'; }).join("") + '</select></div>' +
       '<div style="width:120px"><div class="kicker">Difficulty</div><select class="search" id="nDiff"><option>Normal</option><option>Hard</option></select></div></div>' +
       '<button class="btn gold wide" data-act="create-run">Create</button></div>');
   }
@@ -867,12 +1076,20 @@
       '<div class="small muted">Joins: ' + esc(u.join) + (u.aff && u.aff !== "—" ? " · Affinity: " + esc(u.aff) : "") + '</div></div>' +
       '<p style="font-size:13.5px;color:#C9D0DB">' + esc(u.note) + '</p>' +
       '<div class="card" style="background:var(--surface2)"><div class="kicker">Build</div><div class="small" style="margin-top:4px">' + esc(u.build) + '</div></div>' +
-      '<div class="kicker">Status</div>' +
+      '<div class="row" style="gap:10px;align-items:center"><div><div class="kicker">Level</div>' +
+      '<input class="lvlInput" type="number" min="1" max="20" data-lvl="' + u.id + '" value="' + (r.levels[u.id] || "") + '"></div>' +
+      '<div style="flex:1"><div class="kicker">Status</div>' +
       '<div class="row wrap" style="gap:6px">' +
       [["core", "Core"], ["bench", "Bench"], ["dead", "Dead"], ["", "Clear"]].map(function (x) {
         return '<button class="btn ' + (st === x[0] ? "gold" : "") + '" data-act="set-roster" data-u="' + u.id + '" data-v="' + x[0] + '">' + x[1] + '</button>';
-      }).join("") + '</div>' +
-      '</div>';
+      }).join("") + '</div></div></div>';
+    if (u.promos && u.promos.length) {
+      body += '<div><div class="kicker" style="margin-bottom:5px">Promotion branch</div><div class="row wrap" style="gap:6px">' +
+        u.promos.map(function (p) {
+          return '<button class="btn ' + (r.promos[u.id] === p ? "gold" : "") + '" data-act="set-promo" data-u="' + u.id + '" data-v="' + esc(p) + '">' + esc(p) + '</button>';
+        }).join("") + '</div></div>';
+    }
+    body += '</div>';
     openSheet(u.name, body);
   }
 
@@ -955,8 +1172,130 @@
       '</div>');
   }
 
-  /* ---------------- events ---------------- */
+  /* ---------------- auto-advance, gaiden offers, handoff ---------------- */
+  function listFor(r) { return chaptersFor(r.mode); }
+
+  function nextPlayable(r, fromCh, skipGaidens) {
+    var list = listFor(r);
+    var idx = -1;
+    for (var i = 0; i < list.length; i++) if (list[i].id === fromCh.id) idx = i;
+    if (idx < 0) return null;
+    for (var j = idx + 1; j < list.length; j++) {
+      var c = list[j];
+      if (c.gaiden && (skipGaidens || gaidenLost(c, r))) continue;
+      return c;
+    }
+    return null;
+  }
+
+  function moveTo(ch, prev) {
+    var r = run();
+    var from = prev !== undefined ? prev : r.chapterId;
+    r.chapterId = ch.id;
+    state.ui.sel = ch.id;
+    state.ui.tab = "chapters";
+    save(); render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast("Moved to Ch." + numFor(ch, r.mode), "Undo", function () {
+      r.chapterId = from; state.ui.sel = from; save(); render();
+    });
+  }
+
+  function afterClose(ch) {
+    var r = run();
+    if (DATA.id === "fe7" && r.mode === "lyn" && ch.id === "l10") { handoffSheet(); return; }
+    if (DATA.id === "fe8" && ch.id === "c8") { routeSheet(); return; }
+    var next = nextPlayable(r, ch, false);
+    if (!next) { completionSheet(); return; }
+    if (next.gaiden && !next.mandatory && !r.reached[next.id]) { gaidenSheet(next); return; }
+    moveTo(next);
+  }
+
+  function routeSheet() {
+    var r = run();
+    openSheet("Choose your route",
+      '<p style="margin:0 0 12px">Chapter 8 is the split. Eirika gets Innes, Gerik and Tethys early; Ephraim gets Duessel and Cormag early. The other lord returns in Chapter 15.</p>' +
+      '<div class="stack">' +
+      '<button class="btn ' + (r.mode === "eirika" ? "gold" : "") + '" data-act="set-route" data-v="eirika">Eirika Route — Distant Blade</button>' +
+      '<button class="btn ' + (r.mode === "ephraim" ? "gold" : "") + '" data-act="set-route" data-v="ephraim">Ephraim Route — Fort Rigwald</button>' +
+      '</div>');
+  }
+
+  function gaidenSheet(next) {
+    var r = run();
+    openSheet("Side quest unlocked",
+      '<p style="margin:0 0 12px">' + esc(next.req || "A side quest is available.") + '</p>' +
+      '<div class="stack">' +
+      '<button class="btn gold wide" data-act="play-gaiden" data-id="' + next.id + '">Play ' + esc(numFor(next, r.mode)) + ' ' + esc(next.title) + '</button>' +
+      '<button class="btn wide" data-act="skip-gaiden" data-id="' + next.id + '">Skip to the next story chapter</button>' +
+      '</div>');
+  }
+
+  function completionSheet() {
+    var r = run();
+    r.complete = true; save();
+    var chapters = listFor(r);
+    var done = chapters.filter(function (c) { return chapterDone(c, r); }).length;
+    var missed = [];
+    chapters.forEach(function (c) {
+      branchFilter(c, r).forEach(function (x) {
+        if (!isChecked(r, c, x.i) && (x.it.k === "recruit" || x.it.k === "chest")) missed.push(x.it.t);
+      });
+    });
+    var extra = "";
+    if (DATA.id === "fe7" && r.mode === "eliwood") {
+      extra = '<button class="btn wide" data-act="start-hector">Start Hector Mode</button>';
+    }
+    openSheet("Run complete",
+      '<div class="card" style="background:var(--surface2)"><div class="kicker">' + esc(DATA.short) + ' · ' + esc(modeName(r.mode)) + '</div>' +
+      '<div style="font-size:26px;font-weight:650;margin:4px 0">' + done + " / " + chapters.length + '</div>' +
+      '<div class="small muted">chapters closed</div></div>' +
+      '<div class="small" style="margin-top:10px">' + (missed.length ? "Still unrecorded: " + esc(missed.slice(0, 8).join(", ")) + (missed.length > 8 ? "…" : "") : "Nothing unrecorded. Clean run.") + '</div>' +
+      '<div class="stack" style="margin-top:12px">' + extra + '<button class="btn wide" data-act="close-sheet">Done</button></div>');
+  }
+
+  function handoffSheet() {
+    var r = run();
+    var lyn = chaptersFor("lyn");
+    var recruits = [], deaths = [], gaidens = [];
+    lyn.forEach(function (c) {
+      branchFilter(c, r).forEach(function (x) {
+        if (x.it.k === "recruit" && isChecked(r, c, x.i)) recruits.push(x.it.t);
+      });
+      if (c.gaiden) gaidens.push(c.title + " — " + (r.reached[c.id] ? "played" : gaidenLost(c, r) ? "lost" : "not played"));
+    });
+    Object.keys(r.roster).forEach(function (u) {
+      if (r.roster[u] === "dead") { var un = unitById(u); deaths.push(un ? un.name : u); }
+    });
+    var items = 0;
+    lyn.forEach(function (c) {
+      branchFilter(c, r).forEach(function (x) { if (x.it.k !== "recruit" && isChecked(r, c, x.i)) items++; });
+    });
+    var nils = r.levels["nils"] || "";
+    openSheet("Lyn Mode complete",
+      '<p style="margin:0 0 10px">Eliwood Mode begins at Ch.11. Here is what carries over.</p>' +
+      '<div class="card" style="background:var(--surface2);margin-bottom:10px">' +
+      '<div class="small"><b>Recruited:</b> ' + esc(recruits.join(", ") || "none recorded") + '</div>' +
+      '<div class="small" style="margin-top:4px"><b>Items collected:</b> ' + items + '</div>' +
+      '<div class="small" style="margin-top:4px"><b>Deaths:</b> ' + esc(deaths.join(", ") || "none") + '</div>' +
+      '<div class="small" style="margin-top:4px"><b>Gaidens:</b> ' + esc(gaidens.join(" · ") || "none") + '</div>' +
+      '</div>' +
+      '<div class="kicker">Nils level at the end of Ch.10</div>' +
+      '<div class="row" style="gap:8px;margin:6px 0 10px"><input class="lvlInput" id="nilsLvl" type="number" min="1" max="20" value="' + nils + '">' +
+      '<span class="small muted">Needs level 7 for Hector Mode 19xx.</span></div>' +
+      '<div id="nilsWarn" class="small" style="color:#DFAE5C;margin-bottom:10px"></div>' +
+      '<button class="btn gold wide" data-act="do-handoff">Continue to Eliwood Ch.11</button>');
+    var lv = document.getElementById("nilsLvl");
+    if (lv) lv.addEventListener("input", function () {
+      var v = parseInt(lv.value, 10);
+      document.getElementById("nilsWarn").textContent = (v && v < 7) ? "Below 7 — 19xx will be locked in Hector Mode." : "";
+    });
+  }
+
+
   document.addEventListener("click", function (e) {
+    var gt = e.target.closest("[data-game]");
+    if (gt) { switchGame(gt.dataset.game); return; }
     var t = e.target.closest("[data-act]");
     if (!t) {
       if (e.target.closest("[data-close]")) closeSheet();
@@ -966,6 +1305,39 @@
     var r = run();
 
     switch (act) {
+      case "game": switchGame(t.dataset.id); break;
+      case "play-gaiden": {
+        var g = chById(t.dataset.id);
+        if (g) { r.reached[g.id] = true; closeSheet(); moveTo(g); }
+        break;
+      }
+      case "skip-gaiden": {
+        var gg = chById(t.dataset.id);
+        var nx = gg ? nextPlayable(r, gg, true) : null;
+        closeSheet();
+        if (nx) moveTo(nx); else completionSheet();
+        break;
+      }
+      case "close-sheet": closeSheet(); break;
+      case "start-hector": {
+        var nr = newRun("Hector " + r.diff, "hector", r.diff, "fe7");
+        state.runs.push(nr);
+        state.active = nr.id; state.lastRun["fe7"] = nr.id;
+        state.ui.tab = "chapters"; state.ui.sel = null;
+        save(); closeSheet(); render();
+        toast("Hector Mode started");
+        break;
+      }
+      case "do-handoff": {
+        var lv = document.getElementById("nilsLvl");
+        if (lv && lv.value) r.levels["nils"] = parseInt(lv.value, 10);
+        Object.keys(r.roster).forEach(function (u) { if (r.roster[u] === "dead") r.roster[u] = "bench"; });
+        r.mode = "eliwood"; r.chapterId = "c11"; r.complete = false;
+        state.ui.sel = "c11"; state.ui.tab = "chapters";
+        save(); closeSheet(); render();
+        toast("Eliwood Mode begins");
+        break;
+      }
       case "open-ch":
         state.ui.sel = t.dataset.id;
         state.ui.tab = "chapters";
@@ -1002,7 +1374,9 @@
           }
         }
         toggleItem(r, ch, i);
-        save(); render();
+        save();
+        if (chapterDone(ch, r)) { afterClose(ch); }
+        else { render(); }
         break;
       }
       case "confirm-close": {
@@ -1010,7 +1384,8 @@
           var pc = chById(pendingClose.ch);
           r.checked[itemKey(pc, pendingClose.i)] = true;
           pendingClose = null;
-          save(); closeSheet(); render(); toast("Chapter closed");
+          save();
+          afterClose(pc);
         }
         break;
       }
@@ -1024,7 +1399,7 @@
       case "checkall": {
         var c2 = chById(t.dataset.id);
         branchFilter(c2, r).forEach(function (x) { r.checked[itemKey(c2, x.i)] = true; });
-        save(); closeSheet(); render(); toast("Chapter marked done");
+        save(); closeSheet(); afterClose(c2);
         break;
       }
       case "clear": {
@@ -1063,6 +1438,8 @@
       case "rec-filter": state.ui.recFilter = t.dataset.v; save(); render(); break;
       case "item-filter": state.ui.itemFilter = t.dataset.v; save(); render(); break;
       case "supp-filter": state.ui.suppFilter = t.dataset.v; save(); render(); break;
+      case "ex-filter": state.ui.exFilter = t.dataset.v; save(); render(); break;
+      case "exploit": exploitSheet(+t.dataset.i); break;
       case "unit":
         if (t.dataset.u) unitSheet(t.dataset.u);
         break;
@@ -1076,6 +1453,18 @@
         if (rr && (levelsUsed(r, t.dataset.a) > 5 || levelsUsed(r, t.dataset.b) > 5)) toast("Over the 5-level budget");
         break;
       }
+      case "set-route": {
+        r.mode = t.dataset.v;
+        var target = t.dataset.v === "eirika" ? "c9a" : "c9b";
+        save(); closeSheet();
+        moveTo(chById(target), r.chapterId);
+        break;
+      }
+      case "set-promo": {
+        r.promos[t.dataset.u] = t.dataset.v;
+        save(); closeSheet(); render();
+        break;
+      }
       case "set-roster": {
         var u = t.dataset.u, v = t.dataset.v;
         if (v === "") delete r.roster[u]; else r.roster[u] = v;
@@ -1087,15 +1476,16 @@
       case "confirm": r.checked[t.dataset.ch + ":" + t.dataset.i] = true; save(); render(); break;
       case "reject": delete r.checked[t.dataset.ch + ":" + t.dataset.i]; save(); render(); break;
       case "run": runSheet(); break;
-      case "switch-run": state.active = t.dataset.id; save(); closeSheet(); render(); break;
+      case "switch-run": state.active = t.dataset.id; state.lastRun[state.game] = t.dataset.id; save(); closeSheet(); render(); break;
       case "new-run": newRunSheet(); break;
       case "create-run": {
         var name = (document.getElementById("nName") || document.getElementById("newName"));
         var mode = (document.getElementById("nMode") || document.getElementById("newMode"));
         var diff = (document.getElementById("nDiff") || document.getElementById("newDiff"));
-        var nr = newRun(name ? name.value : "New run", mode ? mode.value : "eliwood", diff ? diff.value : "Normal");
+        var nr = newRun(name ? name.value : "New run", mode ? mode.value : "eliwood", diff ? diff.value : "Normal", state.game);
         state.ui.lastMode = nr.mode;
         state.runs.push(nr); state.active = nr.id;
+        state.lastRun[state.game] = nr.id;
         save(); closeSheet(); render(); break;
       }
       case "rename-run": {
@@ -1106,7 +1496,9 @@
       case "delete-run": {
         if (!confirm("Delete this run and all its ticks?")) return;
         state.runs = state.runs.filter(function (x) { return x.id !== r.id; });
-        state.active = state.runs[0] ? state.runs[0].id : null;
+        if (state.lastRun[state.game] === r.id) delete state.lastRun[state.game];
+        state.active = state.runs.filter(function (x) { return x.game === state.game; })[0];
+        state.active = state.active ? state.active.id : null;
         state.ui.sel = null;
         save(); closeSheet(); render();
         break;
@@ -1164,6 +1556,12 @@
       var v = parseInt(el.value, 10);
       if (!isNaN(v) && v > 0) r.turns[el.dataset.turn] = v; else delete r.turns[el.dataset.turn];
       save(); render();
+    }
+    if (el.dataset && el.dataset.lvl) {
+      var rl = run();
+      var lv = parseInt(el.value, 10);
+      if (!isNaN(lv) && lv > 0) rl.levels[el.dataset.lvl] = lv; else delete rl.levels[el.dataset.lvl];
+      save();
     }
     if (el.dataset && el.dataset.booster) {
       var r3 = run();

@@ -49,6 +49,11 @@ a{color:var(--gold)}
   border-radius:999px;padding:7px 12px;font-size:12.5px;color:var(--muted);
 }
 .runChip b{color:var(--text);font-weight:600}
+.games{display:flex;gap:2px;border:1px solid var(--line);border-radius:999px;padding:2px;background:var(--surface);flex:0 0 auto}
+.games button{padding:5px 9px;border-radius:999px;font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.02em}
+.games button.on{background:var(--gold);color:#171307}
+.games button.off{opacity:.32}
+@media (max-width:560px){ .brandText{display:none} .runChip{max-width:40vw} .games button{padding:5px 7px} }
 
 .tabs{
   display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;
@@ -105,6 +110,12 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:12px 0}
 
 .bar{height:5px;border-radius:99px;background:var(--surface3);overflow:hidden}
 .bar>i{display:block;height:100%;background:var(--gold);border-radius:99px}
+.campaign{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap}
+.camp{display:flex;align-items:center;gap:8px;flex:1;min-width:190px}
+.camp .k{font-size:10.5px;color:var(--muted);width:86px;text-transform:uppercase;letter-spacing:.05em}
+.camp .bar{flex:1;height:4px;background:var(--surface3);border-radius:99px;overflow:hidden}
+.camp .bar>i{display:block;height:100%;background:var(--gold)}
+.camp .n{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
 
 /* ---------- do this now ---------- */
 .now{
@@ -305,9 +316,22 @@ table.plain td{padding:7px 8px;border-bottom:1px solid rgba(42,49,60,.6);vertica
 .toast{
   position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:var(--surface3);border:1px solid var(--line);color:var(--text);
-  padding:9px 14px;border-radius:99px;font-size:12.5px;z-index:90;white-space:nowrap;
-  box-shadow:0 8px 30px rgba(0,0,0,.4);
+  padding:8px 10px 8px 14px;border-radius:99px;font-size:12.5px;z-index:90;white-space:nowrap;
+  box-shadow:0 8px 30px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;
 }
+.toast button{color:var(--gold);font-weight:700;font-size:12.5px;padding:4px 8px;border-radius:99px;background:var(--goldSoft)}
+
+.tag.exploit{color:#E7C77E;border-color:rgba(200,162,74,.35);background:var(--goldSoft)}
+.lvlInput{width:64px;min-height:36px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);padding:0 8px;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
+.exCard{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:13px;margin-bottom:9px}
+.exCard h3{font-size:15px;margin-bottom:3px}
+.exCard .risk{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+.exCard .risk.high{color:#F0A3A3;border-color:rgba(208,85,85,.35);background:var(--dangerSoft)}
+.exCard .risk.medium{color:#DFAE5C;border-color:rgba(192,138,46,.35);background:var(--warnSoft)}
+.exCard .risk.low,.exCard .risk.none{color:#8FD3AE;border-color:rgba(79,160,114,.35);background:var(--okSoft)}
+.exCard ol{margin:8px 0 0;padding-left:19px;color:#C9D0DB;font-size:13px;line-height:1.55}
+.exCard li{margin-bottom:5px}
+.exCard .warn{margin-top:8px;font-size:12px;color:#DFAE5C}
 
 .empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:13.5px}
 .empty b{display:block;color:var(--text);margin-bottom:4px;font-size:15px}

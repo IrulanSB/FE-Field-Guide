@@ -623,6 +623,71 @@ window.FE7 = {
 
   supports: [],
 
+  exploits: [
+    { name: "Enemy control glitch (Mine glitch)", cat: "glitch", risk: "Medium",
+      what: "Take control of the enemy army for one turn. Trade items between enemies, disarm a boss, or walk a boss's weapon onto a weak enemy so it drops.",
+      steps: [
+        "Get a Mine: Ch.13 village, 16x/17x with a Caelin soldier alive, steal one in 18x/19x, 26x/28x or 27/29.",
+        "Place the Mine on a tile an enemy will walk over during the enemy phase.",
+        "Let the enemy step on it. While the mine's damage effect plays — after the flash, before the next enemy moves — soft-reset with A+B+Start+Select (or power off).",
+        "Reload the save. Your turn is still active and every red unit is selectable.",
+        "Move items between enemies, send a boss's weapon to a weak unit that will drop it, or trigger villages with enemy units."
+      ],
+      warn: "Promoting an enemy unit freezes the US/EU versions. It is safe in the European version.",
+      video: "https://www.youtube.com/results?search_query=fire+emblem+7+mine+glitch",
+      chapters: ["c13", "port", "imprisoner", "night", "cog"] },
+    { name: "Arena abuse", cat: "tactic", risk: "Low",
+      what: "Infinite EXP and gold from a safe arena, as long as you can heal between rounds.",
+      steps: [
+        "Use the arena in Four-Fanged Offense (Ch.23E/24H).",
+        "Park a healer and a strong unit next to it.",
+        "Bet the minimum every round so a loss costs little.",
+        "Heal between fights and repeat until the unit promotes."
+      ],
+      warn: "Arena losses still kill the unit on classic rules. Bet low until you know the matchup.",
+      video: "", chapters: ["fourfang"] },
+    { name: "Boss abuse", cat: "tactic", risk: "Low",
+      what: "Farm a boss who cannot hurt your unit, using a fort or throne to reset the fight.",
+      steps: [
+        "Find a boss on a throne or fort with low damage against one of your units.",
+        "Remove your unit's weapon so it cannot kill the boss.",
+        "End turn repeatedly and let the boss attack into your defence.",
+        "Heal as needed. Every round is free EXP for the unit being hit."
+      ],
+      warn: "Watch weapon uses and the turn count if a gaiden is still live.",
+      video: "", chapters: [] },
+    { name: "Support grinding", cat: "tactic", risk: "None",
+      what: "Build support points without fighting by ending turns with two units adjacent.",
+      steps: [
+        "Pick a defensive map with no reinforcements bearing down.",
+        "Park the pair adjacent on a fort or in a corner.",
+        "End turn repeatedly. Points accrue every turn they stay adjacent.",
+        "Repeat until the support conversation appears, then trigger it before moving on."
+      ],
+      warn: "Supports do not build during Lyn Mode.",
+      video: "", chapters: [] },
+    { name: "Save-state RNG rigging", cat: "emulator", risk: "None",
+      what: "Reroll level-ups, hits and misses by saving before the roll and reloading.",
+      steps: [
+        "Save state immediately before the combat or level-up.",
+        "If the result is bad, load the state and repeat.",
+        "For level-ups, burn a different number of RNs first (move a unit, open a menu) to change the outcome.",
+        "Save again once you have the result you want."
+      ],
+      warn: "Nothing breaks, but it removes all tension from the run.",
+      video: "", chapters: [] },
+    { name: "Warp and Rescue skips", cat: "tactic", risk: "None",
+      what: "Move a lord onto the throne or gate and end the map early.",
+      steps: [
+        "Get Warp from the village in Ch.27E/29H.",
+        "Move the lord as far as possible, then Warp them the rest of the way.",
+        "Seize on the same turn if the objective is a throne or gate.",
+        "Rescue can pull a unit out of danger or ferry them across a wall."
+      ],
+      warn: "Skips cost you chests, villages and drops. Loot first.",
+      video: "", chapters: ["cog"] }
+  ],
+
   strategy: {
     route: [
       "Lyn Mode first: finish Ch.7 within 15 turns for 7x, and get Nils to level 7 by Ch.10 for Hector's 19xx later.",
