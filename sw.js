@@ -1,5 +1,5 @@
 /* Offline cache. Bump CACHE when content changes. */
-const CACHE = "fe7-fg-v25";
+const CACHE = "fe7-fg-v26";
 const ASSETS = [
   "./",
   "index.html",
@@ -41,6 +41,22 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== location.origin) return;
+
+  // Navigations: network first, so a deploy is picked up on the next open.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put("index.html", copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request).then((hit) => hit || caches.match("index.html")))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((hit) => {
