@@ -38,20 +38,25 @@
   if (!state.game) state.game = "fe7";
   if (!state.lastRun) state.lastRun = {};
   if (!state.settings) state.settings = {};
-  if (state.settings.lore === undefined) state.settings.lore = false;
-  if (state.settings.boss === undefined) state.settings.boss = false;
-  if (state.settings.death === undefined) state.settings.death = false;
-  if (state.settings.endings === undefined) state.settings.endings = false;
-  if (state.settings.strategy === undefined) state.settings.strategy = false;
-  if (state.settings.steals === undefined) state.settings.steals = false;
-  if (state.settings.turnByTurn === undefined) state.settings.turnByTurn = false;
-  if (!state.settings.planStyle) state.settings.planStyle = "completionist";
-  if (!state.settingsVersion || state.settingsVersion < 3) {
-    state.settings.strategy = false;
-    state.settings.steals = false;
-    state.settings.turnByTurn = true;
-    state.settings.planStyle = "completionist";
-    state.settingsVersion = 3;
+  if (state.settings.spoilers === undefined) state.settings.spoilers = false;
+  if (state.settings.lore === undefined) state.settings.lore = true;
+  if (state.settings.boss === undefined) state.settings.boss = true;
+  if (state.settings.death === undefined) state.settings.death = true;
+  if (state.settings.endings === undefined) state.settings.endings = true;
+  if (state.settings.plans === undefined) state.settings.plans = true;
+  if (state.settings.strategy === undefined) state.settings.strategy = true;
+  if (state.settings.steals === undefined) state.settings.steals = true;
+  if (state.settings.turnByTurn === undefined) state.settings.turnByTurn = true;
+  if (state.settings.planStyle === undefined) state.settings.planStyle = "completionist";
+  if (!state.settingsVersion || state.settingsVersion < 4) {
+    state.settings.spoilers = false;
+    state.settings.lore = true;
+    state.settings.boss = true;
+    state.settings.death = true;
+    state.settings.endings = true;
+    state.settings.plans = true;
+    state.settings.steals = true;
+    state.settingsVersion = 4;
   }
   migrate();
   applyLore(window.FE7, window.FE7_LORE, window.FE7_UNIT_LORE);
@@ -81,7 +86,7 @@
     return {
       id: uid(), name: name || "New run", mode: mode, diff: diff || "Normal", game: g,
       created: Date.now(), chapterId: first ? first.id : "",
-      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}, levels: {}, promos: {}, seen: {},
+      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}, levels: {}, promos: {}, seen: {}, done: {},
       playedModes: [mode]
     };
   }
@@ -91,7 +96,7 @@
       r.checked = r.checked || {}; r.turns = r.turns || {}; r.notes = r.notes || {};
       r.roster = r.roster || {}; r.team = r.team || []; r.boosters = r.boosters || {};
       r.branches = r.branches || {}; r.reached = r.reached || {}; r.supports = r.supports || {};
-      r.levels = r.levels || {}; r.promos = r.promos || {}; r.seen = r.seen || {};
+      r.levels = r.levels || {}; r.promos = r.promos || {}; r.seen = r.seen || {}; r.done = r.done || {};
       if (!r.playedModes || !r.playedModes.length) {
         r.playedModes = [r.mode];
         if (r.game === "fe7" && r.mode === "eliwood") {
@@ -221,17 +226,10 @@
     if (r.checked[k]) delete r.checked[k]; else r.checked[k] = true;
   }
   function progress(ch, r) {
-    var list = branchFilter(ch, r);
-    if (!list.length) return { done: 0, total: 0, pct: 0, assumed: 0 };
-    var d = 0, a = 0;
-    list.forEach(function (x) {
-      var st = checkState(r, ch, x.i);
-      if (st === "done") d++;
-      else if (st === "assumed") { d++; a++; }
-    });
-    return { done: d, total: list.length, pct: Math.round(d / list.length * 100), assumed: a };
+    var done = !!(r.done && r.done[ch.id]);
+    return { done: done ? 1 : 0, total: 1, pct: done ? 100 : 0, assumed: 0 };
   }
-  function chapterDone(ch, r) { var p = progress(ch, r); return p.done >= p.total; }
+  function chapterDone(ch, r) { return !!(r.done && r.done[ch.id]); }
 
   function turnLimitApplies(ch, r) {
     if (!ch.turn || !ch.turn.limit) return false;
@@ -300,8 +298,10 @@
       ? "<b>" + esc(r.name) + "</b>"
       : "No run";
     if (!r) { app.innerHTML = welcome(); return; }
+    var primary = ["chapters", "roster", "team", "supports"];
     document.querySelectorAll("#tabs button").forEach(function (b) {
-      b.classList.toggle("active", b.dataset.tab === state.ui.tab);
+      var on = b.dataset.tab === state.ui.tab || (b.dataset.tab === "more" && primary.indexOf(state.ui.tab) < 0);
+      b.classList.toggle("active", on);
     });
     var html = "";
     try {
@@ -313,10 +313,10 @@
         case "supports": html = viewSupports(r); break;
         case "roster": html = viewRoster(r); break;
         case "team": html = viewTeam(r); break;
-        case "audit": html = viewAudit(r); break;
         case "search": html = viewSearch(r); break;
         case "exploits": html = viewExploits(r); break;
         case "strategy": html = viewStrategy(); break;
+        case "more": html = viewMore(r); break;
         default: html = viewChapters(r);
       }
     } catch (e) {
@@ -377,58 +377,45 @@
   function viewChapters(r) {
     var list = chaptersFor(r.mode);
     var desktop = window.matchMedia("(min-width:900px)").matches;
-    var cur = chById(state.ui.sel) || (desktop ? chById(r.chapterId) : null);
-    var now = nowItem(r);
+    var cur = chById(r.chapterId) || chaptersFor(r.mode)[0];
     var html = "";
-    var showNow = desktop || !state.ui.sel;
-
-    if (showNow && now.ch) {
-      html += '<div class="now">' +
-        '<div class="kicker">' + (now.assumed ? "Verify" : "Do this now") + ' · Ch.' + esc(numFor(now.ch, r.mode)) + '</div>' +
-        '<h3>' + (now.item ? esc(now.item.t) : "Chapter complete") + '</h3>' +
-        '<p>' + (now.item ? (now.assumed ? "You bulk-marked this during catch-up — confirm it actually happened. " : "") + esc(now.item.d || now.ch.obj) : "Everything in this chapter is ticked. Set your next chapter with ••• → Set as my current chapter.") + '</p>' +
-        '<div style="margin-top:11px"><button class="btn gold" data-act="jump" data-id="' + now.ch.id + '">Open chapter →</button></div>' +
-        '</div>';
-    }
-
     html += campaignBars(r);
-    html += '<div class="split' + (state.ui.sel ? " detailOpen" : "") + '">';
-    /* list */
-    html += '<div class="chlist"><div class="chhead"><span class="h">' + esc(modeName(r.mode)) + ' · ' + list.length + ' chapters</span>' +
-      '<button class="btn ghost" data-act="catchup" style="min-height:32px;padding:0 10px;font-size:12px">Catch up</button></div>';
-    list.forEach(function (ch) {
-      var p = progress(ch, r);
-      var cls = p.total === 0 ? "" : p.done >= p.total ? (p.assumed ? "assumed" : "full") : p.done > 0 ? "part" : "";
-      if (gaidenLost(ch, r) || (turnLimitApplies(ch, r) && r.turns[ch.id] > ch.turn.limit)) cls = "lost";
-      var sel = state.ui.sel === ch.id ? " sel" : "";
-      var tag = ch.gaiden ? '<span class="tag miss">G</span>' : "";
-      var ex = exploitsFor(ch).length ? '<span class="tag exploit">⚡</span>' : "";
-      var stb = stealsFor(ch).length ? '<span class="tag exploit">S</span>' : "";
-      html += '<div class="ch"><button class="chrow' + sel + '" data-act="open-ch" data-id="' + ch.id + '">' +
-        '<span class="num">' + esc(numFor(ch, r.mode)) + '</span>' +
-        '<span class="nm">' + esc(ch.title) + '</span>' + tag + ex + stb +
-        '<span class="pr' + (p.total && p.done >= p.total ? " full" : "") + '">' + (p.total ? p.done + "/" + p.total + (p.assumed ? " ~" : "") : "—") + '</span>' +
-        '<span class="dot ' + cls + '"></span>' +
-        '</button></div>';
-    });
-    if (DATA.dungeons && DATA.dungeons.length) {
-      html += '<div class="chhead" style="padding-top:16px"><span class="h">Post-game</span></div>';
-      DATA.dungeons.forEach(function (ch) {
-        var p = progress(ch, r);
-        var sel = state.ui.sel === ch.id ? " sel" : "";
+    if (desktop) {
+      html += '<div class="split">';
+      html += '<div class="chlist"><div class="chhead"><span class="h">' + esc(modeName(r.mode)) + ' · ' + list.length + ' chapters</span></div>';
+      list.forEach(function (ch) {
+        var done = chapterDone(ch, r);
+        var lost = gaidenLost(ch, r) || (turnLimitApplies(ch, r) && r.turns[ch.id] > ch.turn.limit);
+        var sel = r.chapterId === ch.id ? " sel" : "";
+        var tag = ch.gaiden ? '<span class="tag miss">G</span>' : "";
+        var ex = exploitsFor(ch).length ? '<span class="tag exploit">⚡</span>' : "";
+        var stb = stealsFor(ch).length ? '<span class="tag exploit">S</span>' : "";
         html += '<div class="ch"><button class="chrow' + sel + '" data-act="open-ch" data-id="' + ch.id + '">' +
-          '<span class="num">' + esc(ch.num) + '</span>' +
-          '<span class="nm">' + esc(ch.title.replace(/^(Tower of Valni|Lagdou Ruins) — /, "")) + '</span>' +
-          '<span class="pr">' + (p.total ? p.done + "/" + p.total : "—") + '</span>' +
-          '<span class="dot ' + (p.total === 0 ? "" : p.done >= p.total ? "full" : p.done ? "part" : "") + '"></span>' +
+          '<span class="num">' + esc(numFor(ch, r.mode)) + '</span>' +
+          '<span class="nm">' + esc(ch.title) + '</span>' + tag + ex + stb +
+          '<span class="pr' + (done ? " full" : "") + '">' + (done ? "✓" : "—") + '</span>' +
+          '<span class="dot ' + (lost ? "lost" : done ? "full" : "") + '"></span>' +
           '</button></div>';
       });
+      if (DATA.dungeons && DATA.dungeons.length) {
+        html += '<div class="chhead" style="padding-top:16px"><span class="h">Post-game</span></div>';
+        DATA.dungeons.forEach(function (ch) {
+          var done = chapterDone(ch, r);
+          var sel = r.chapterId === ch.id ? " sel" : "";
+          html += '<div class="ch"><button class="chrow' + sel + '" data-act="open-ch" data-id="' + ch.id + '">' +
+            '<span class="num">' + esc(ch.num) + '</span>' +
+            '<span class="nm">' + esc(ch.title.replace(/^(Tower of Valni|Lagdou Ruins) — /, "")) + '</span>' +
+            '<span class="pr' + (done ? " full" : "") + '">' + (done ? "✓" : "—") + '</span>' +
+            '<span class="dot ' + (done ? "full" : "") + '"></span>' +
+            '</button></div>';
+        });
+      }
+      html += '</div>';
+      html += '<div class="detail">' + chapterDetail(cur, r) + '</div>';
+      html += '</div>';
+    } else {
+      html += '<div class="detail mobileDetail">' + chapterDetail(cur, r) + '</div>';
     }
-    html += '</div>';
-
-    /* detail */
-    html += '<div class="detail">' + (cur ? chapterDetail(cur, r) : '<div class="detailEmpty">Pick a chapter</div>') + '</div>';
-    html += '</div>';
     return html;
   }
 
@@ -449,6 +436,9 @@
       h += '<div class="conflict"><b>Roster warning</b>' +
         rw.map(function (w) { return '<div class="small">' + esc(w) + '</div>'; }).join("") + '</div>';
     }
+
+    h += renderPlan(ch, r);
+    h += renderFullClear(ch, r);
 
     if (ch.side && (!ch.side.mode || ch.side.mode === r.mode)) {
       h += '<div class="turnbox" style="border-color:rgba(200,162,74,.3)">' +
@@ -471,27 +461,7 @@
     }
 
     var items = branchFilter(ch, r);
-    if (items.length) {
-      h += '<div class="sect"><div class="sectH"><h4>Checklist · ' + p.done + "/" + p.total + (p.assumed ? " · " + p.assumed + " assumed" : "") + '</h4>' +
-        '<div class="row" style="gap:4px"><button class="btn ghost tiny" data-act="checkall" data-id="' + ch.id + '" style="min-height:28px;padding:0 8px">All</button>' +
-        '<button class="btn ghost tiny" data-act="clear" data-id="' + ch.id + '" style="min-height:28px;padding:0 8px">Clear</button></div></div>';
-      items.forEach(function (x) {
-        var st = checkState(r, ch, x.i);
-        var it = x.it;
-        var tags = "";
-        if (it.k !== "recruit" && /Seal|Card|Boots|Crest|Ring|Whip|Bolt|Contract|Robe|Drops|Gem/.test(it.t)) tags += '<span class="tag miss">Key item</span>';
-        if (it.verify) tags += '<span class="tag verify">Verify</span>';
-        h += '<div class="item ' + st + (it.k === "recruit" ? " recruit" : "") + '">' +
-          '<button class="cb" data-act="toggle" data-ch="' + ch.id + '" data-i="' + x.i + '" aria-label="' + (st ? "Unmark " : "Mark ") + esc(it.t) + '">✓</button>' +
-          '<div class="body"><div class="t">' + esc(it.t) + '</div>' +
-          (it.d ? '<div class="d">' + esc(it.d) + '</div>' : "") +
-          (tags ? '<div class="tags">' + tags + '</div>' : "") +
-          '</div>' +
-          '<span class="tag">' + (KIND_LABEL[it.k] || it.k) + '</span>' +
-          '</div>';
-      });
-      h += '</div>';
-    } else {
+    if (!items.length) {
       h += '<div class="empty"><b>Nothing missable here</b>Fight the map and move on.</div>';
     }
 
@@ -501,7 +471,6 @@
       h += '</div>';
     }
 
-    h += renderPlan(ch, r);
     h += renderTalks(ch);
     h += renderLore(ch);
 
@@ -514,6 +483,10 @@
           '<button class="btn ghost small go" data-act="exploit" data-i="' + DATA.exploits.indexOf(e) + '">Steps</button></div>';
       });
       h += '</div>';
+    }
+
+    if (ch.id === r.chapterId) {
+      h += '<div style="margin:16px 0 4px"><button class="btn gold wide" data-act="next-chapter" data-id="' + ch.id + '">Next chapter →</button></div>';
     }
 
     h += '<div class="notes"><div class="lbl">Notes</div>' +
@@ -549,16 +522,18 @@
     var f = state.ui.recFilter;
     var counts = { all: rows.length, got: 0, open: 0, lost: 0 };
     rows.forEach(function (row) {
-      var st = checkState(r, row.ch, row.i);
-      var dead = unitStatus(r, row.unit) === "dead";
-      if (st) counts.got++; else if (dead) counts.lost++; else counts.open++;
+      var st = unitStatus(r, row.unit);
+      var got = st === "core" || st === "bench";
+      var dead = st === "dead";
+      if (got) counts.got++; else if (dead) counts.lost++; else counts.open++;
     });
     var shown = rows.filter(function (row) {
-      var st = checkState(r, row.ch, row.i);
-      var dead = unitStatus(r, row.unit) === "dead";
-      if (f === "got") return !!st;
-      if (f === "open") return !st && !dead;
-      if (f === "lost") return dead || (!st && before(r.mode, row.ch.id, r.chapterId));
+      var st = unitStatus(r, row.unit);
+      var got = st === "core" || st === "bench";
+      var dead = st === "dead";
+      if (f === "got") return got;
+      if (f === "open") return !got && !dead;
+      if (f === "lost") return dead || (!got && before(r.mode, row.ch.id, r.chapterId));
       return true;
     });
 
@@ -572,10 +547,11 @@
     h += '<div class="ulist">';
     shown.forEach(function (row) {
       var u = row.unit;
-      var st = checkState(r, row.ch, row.i);
-      var dead = unitStatus(r, u) === "dead";
+      var st = unitStatus(r, u);
+      var dead = st === "dead";
+      var got = st === "core" || st === "bench";
       var tier = u ? u.tier.toLowerCase() : "b";
-      var stateTxt = dead ? '<span class="tag lost">Dead</span>' : st === "done" ? '<span class="tag rec">Recruited</span>' : st === "assumed" ? '<span class="tag verify">Assumed</span>' : '<span class="tag">Open</span>';
+      var stateTxt = dead ? '<span class="tag lost">Dead</span>' : got ? '<span class="tag rec">Recruited</span>' : '<span class="tag">Open</span>';
       h += '<div class="u t-' + tier + (dead ? " dead" : "") + '" data-act="unit" data-u="' + (u ? u.id : "") + '">' +
         '<div class="badge">' + esc(u ? initials(u.name) : "?") + '</div>' +
         '<div style="flex:1;min-width:0"><div class="nm">' + esc(u ? u.name : row.item.t) + '</div>' +
@@ -603,36 +579,24 @@
         rows.push({ ch: ch, item: x.it, i: x.i });
       });
     });
-    var f = state.ui.itemFilter;
-    var shown = rows.filter(function (row) {
-      var st = checkState(r, row.ch, row.i);
-      if (f === "missing") return !st;
-      if (f === "found") return !!st;
-      if (f === "shops") return row.item.k === "shop";
-      return true;
-    });
-    var got = rows.filter(function (x) { return isChecked(r, x.ch, x.i); }).length;
-    var h = '<div class="spread" style="margin-bottom:10px"><div><div class="kicker">Items &amp; treasure</div><h2 class="title">' + got + " of " + rows.length + '</h2></div></div>';
+    var f = state.ui.itemFilter || "all";
+    var shown = f === "shops" ? rows.filter(function (row) { return row.item.k === "shop"; }) : rows;
+    var h = '<div class="spread" style="margin-bottom:10px"><div><div class="kicker">Items &amp; treasure</div><h2 class="title">' + rows.length + ' entries</h2></div></div>';
     h += '<div class="filters">' +
-      ['all|All', 'missing|Missing', 'found|Found', 'shops|Secret shops'].map(function (x) {
-        var p = x.split("|");
-        return '<button class="' + (f === p[0] ? "on" : "") + '" data-act="item-filter" data-v="' + p[0] + '">' + p[1] + '</button>';
+      [['all', 'All'], ['shops', 'Secret shops']].map(function (x) {
+        return '<button class="' + (f === x[0] ? "on" : "") + '" data-act="item-filter" data-v="' + x[0] + '">' + x[1] + '</button>';
       }).join("") + '</div>';
     h += '<div class="ulist">';
     shown.forEach(function (row) {
-      var st = checkState(r, row.ch, row.i);
-      var bcol = st === "done" ? "var(--ok)" : st === "assumed" ? "var(--warn)" : "var(--surface3)";
-      var bfg = st ? (st === "done" ? "#08120C" : "#2A1D07") : "var(--dim)";
-      var bmark = st === "assumed" ? "~" : st ? "✓" : "•";
-      h += '<div class="u" data-act="toggle-jump" data-ch="' + row.ch.id + '" data-i="' + row.i + '">' +
-        '<div class="badge" style="background:' + bcol + ';color:' + bfg + '">' + bmark + '</div>' +
+      h += '<div class="u" data-act="jump" data-id="' + row.ch.id + '">' +
+        '<div class="badge" style="background:var(--surface3);color:var(--dim)">•</div>' +
         '<div style="flex:1;min-width:0"><div class="nm">' + esc(row.item.t) + '</div>' +
         '<div class="sub">Ch.' + esc(numFor(row.ch, r.mode)) + ' ' + esc(row.ch.title) + '</div>' +
         (row.item.d ? '<div class="sub" style="color:var(--dim)">' + esc(row.item.d) + '</div>' : "") + '</div>' +
         '<span class="tag">' + (KIND_LABEL[row.item.k] || row.item.k) + '</span>' +
         '</div>';
     });
-    if (!shown.length) h += '<div class="empty"><b>Nothing found</b>Try a different filter.</div>';
+    if (!shown.length) h += '<div class="empty"><b>Nothing here</b>Try a different filter.</div>';
     h += '</div>';
     return h;
   }
@@ -1014,7 +978,21 @@
     return h;
   }
 
-  /* ---------------- strategy ---------------- */
+  /* ---------------- more ---------------- */
+  function viewMore(r) {
+    var items = [["recruits", "Recruits"], ["items", "Items"], ["gaidens", "Gaidens"], ["search", "Search"], ["exploits", "Exploits"], ["strategy", "Strategy"]];
+    var h = '<div class="kicker">More</div><h2 class="title" style="margin-bottom:12px">Reference</h2><div class="ulist">';
+    items.forEach(function (x) {
+      h += '<button class="u" style="width:100%;text-align:left" data-act="tab" data-v="' + x[0] + '">' +
+        '<div style="flex:1"><div class="nm">' + x[1] + '</div></div><span class="dim">→</span></button>';
+    });
+    h += '<button class="u" style="width:100%;text-align:left" data-act="open-settings">' +
+      '<div style="flex:1"><div class="nm">Settings</div></div><span class="dim">→</span></button>';
+    h += '</div>';
+    return h;
+  }
+
+
   function viewStrategy() {
     var s = DATA.strategy;
     var h = '<div class="strat"><div class="kicker">Strategy</div><h2 class="title">How to play it well</h2>' +
@@ -1140,6 +1118,7 @@
   }
 
   function visibleTalks(ch) {
+    if (!state.settings.spoilers) return [];
     return (ch.talks || []).filter(function (t) {
       if (t.k === "boss" && !state.settings.boss) return false;
       if (t.k === "death" && !state.settings.death) return false;
@@ -1278,10 +1257,12 @@
   }
 
   function renderPlan(ch, r) {
-    if (!state.settings.strategy) return "";
+    if (!state.settings.spoilers || !state.settings.plans) {
+      return '<div class="planBlock"><div class="loreBody"><p class="dim" style="margin:0">Spoilers hidden — turn them on in Settings to show the optimal plan.</p></div></div>';
+    }
     if (!ch.obj && !ch.items.length) return "";
     var p = planFor(ch, r);
-    var h = '<details class="loreBox"' + (state.ui.openPlan === ch.id ? " open" : "") + '><summary class="loreSum">Optimal plan · Completionist</summary><div class="loreBody">';
+    var h = '<div class="planBlock"><div class="planHead">Optimal plan · Completionist</div><div class="loreBody">';
     if (p.styleNote) h += '<p class="planStyle">' + esc(p.styleNote) + '</p>';
     var groups = fullClearList(ch, r);
     var groupKeys = Object.keys(groups);
@@ -1344,12 +1325,29 @@
       h += '</ul></div>';
     }
     if (p.fallback) h += '<p><b>If it goes wrong:</b> ' + esc(p.fallback) + '</p>';
-    h += '</div></details>';
+    h += '</div></div>';
+    return h;
+  }
+
+  function renderFullClear(ch, r) {
+    if (!state.settings.spoilers) return "";
+    var kinds = { village: "Village", chest: "Chest", recruit: "Recruit", item: "Found", ruin: "Ruins", shop: "Shop" };
+    var items = branchFilter(ch, r).filter(function (x) { return kinds[x.it.k]; });
+    if (!items.length) return "";
+    var h = '<div class="sect"><div class="sectH"><h4>Full clear · ' + items.length + '</h4></div><ul class="fcList">';
+    items.forEach(function (x) {
+      var rec = x.it.k === "recruit" && unitsForItem(x.it).length
+        ? ' <button class="btn ghost tiny" data-act="recruit-now" data-ch="' + ch.id + '" data-i="' + x.i + '">Recruited</button>'
+        : "";
+      h += '<li><span class="tag">' + esc(kinds[x.it.k]) + '</span> <span>' + esc(x.it.t) + '</span>' + rec + '</li>';
+    });
+    h += '</ul></div>';
     return h;
   }
 
 
   function renderLore(ch) {
+    if (!state.settings.spoilers) return "";
     var h = "";
     if (ch.lore && state.settings.lore) {
       h += '<details class="loreBox"' + (state.ui.openLore === ch.id ? " open" : "") + '><summary class="loreSum">Lore</summary>' +
@@ -1375,11 +1373,13 @@
 
   function settingsSheet() {
     var s = state.settings;
-    var toggles = [["lore", "Lore"], ["boss", "Boss quotes"], ["death", "Death quotes"], ["endings", "Endings"], ["strategy", "Optimal plans"], ["steals", "Steal list"]];
-    var body = '<div class="stack"><p class="small muted" style="margin:0">Global settings — one set for every run and both games.</p><div class="row wrap" style="gap:6px">' +
-      toggles.map(function (x) {
-        var on = s[x[0]];
-        return '<button class="btn ' + (on ? "gold" : "") + '" data-act="toggle-setting" data-v="' + x[0] + '">' + x[1] + ': ' + (on ? "On" : "Off") + '</button>';
+    var body = '<div class="stack"><p class="small muted" style="margin:0">Global settings — one set for every run and both games.</p>' +
+      '<button class="btn ' + (s.spoilers ? "gold" : "") + ' wide" data-act="toggle-setting" data-v="spoilers">Spoilers: ' + (s.spoilers ? "Open" : "Hidden") + '</button>' +
+      '<div class="kicker" style="margin-top:10px">Advanced</div>' +
+      '<div class="row wrap" style="gap:6px">' +
+      [["lore", "Lore"], ["boss", "Boss quotes"], ["death", "Death quotes"], ["endings", "Endings"], ["plans", "Optimal plans"], ["steals", "Steal list"]].map(function (x) {
+        var on = s[x[0]] && s.spoilers;
+        return '<button class="btn ' + (on ? "gold" : "") + '" data-act="toggle-setting" data-v="' + x[0] + '"' + (s.spoilers ? "" : ' style="opacity:.45"') + '>' + x[1] + ': ' + (s[x[0]] ? "On" : "Off") + '</button>';
       }).join("") + '</div></div>';
     openSheet("Settings", body);
   }
@@ -1493,7 +1493,7 @@
     if (u.death) {
       body += '<details class="loreBox"><summary class="loreSum">Death quote</summary><div class="loreBody"><p>' + esc(u.death) + '</p></div></details>';
     }
-    if (u.endings && u.endings.length && state.settings.endings) {
+    if (u.endings && u.endings.length && state.settings.spoilers && state.settings.endings) {
       body += '<details class="loreBox"><summary class="loreSum">Paired endings · ' + u.endings.length + '</summary><div class="loreBody">' +
         u.endings.map(function (e) { return "<p>" + esc(e) + "</p>"; }).join("") + '</div></details>';
     }
@@ -1572,6 +1572,17 @@
     }
   }
 
+  function pickerSheet() {
+    var r = run();
+    var list = chaptersFor(r.mode).concat(DATA.dungeons || []);
+    var body = '<div class="stack">' + list.map(function (c) {
+      return '<button class="btn wide" style="justify-content:space-between" data-act="go-chapter" data-id="' + c.id + '">' +
+        '<span>' + esc(c.num || "") + ' ' + esc(c.title) + '</span>' +
+        (chapterDone(c, r) ? '<span class="tag rec">✓</span>' : "") + '</button>';
+    }).join("") + '</div>';
+    openSheet("Choose chapter", body);
+  }
+
   function chMenu(id) {
     var ch = chById(id), r = run();
     openSheet("Ch." + numFor(ch, r.mode) + " " + ch.title,
@@ -1647,12 +1658,7 @@
     r.complete = true; save();
     var chapters = listFor(r);
     var done = chapters.filter(function (c) { return chapterDone(c, r); }).length;
-    var missed = [];
-    chapters.forEach(function (c) {
-      branchFilter(c, r).forEach(function (x) {
-        if (!isChecked(r, c, x.i) && (x.it.k === "recruit" || x.it.k === "chest")) missed.push(x.it.t);
-      });
-    });
+    var missed = chapters.filter(function (c) { return !chapterDone(c, r); }).map(function (c) { return numFor(c, r.mode) + " " + c.title; });
     var extra = "";
     if (DATA.id === "fe7" && r.mode === "eliwood") {
       extra = '<button class="btn wide" data-act="start-hector">Start Hector Mode</button>';
@@ -1752,16 +1758,37 @@
         break;
       }
       case "open-ch":
-        state.ui.sel = t.dataset.id;
+        r.chapterId = t.dataset.id;
         state.ui.tab = "chapters";
-        save(); render(); window.scrollTo({ top: 0, behavior: "smooth" });
+        save(); render();
         break;
       case "back":
-        state.ui.sel = null; save(); render(); break;
-      case "jump":
-        state.ui.sel = t.dataset.id; state.ui.tab = "chapters"; save(); closeSheet(); render();
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        pickerSheet();
         break;
+      case "go-chapter":
+        r.chapterId = t.dataset.id;
+        state.ui.tab = "chapters";
+        save(); closeSheet(); render();
+        break;
+      case "jump":
+        r.chapterId = t.dataset.id; state.ui.tab = "chapters"; save(); closeSheet(); render();
+        break;
+      case "next-chapter": {
+        var nc = chById(t.dataset.id);
+        r.done[nc.id] = true;
+        save();
+        var nx = nextPlayable(r, nc, false);
+        if (nx && nx.gaiden && !nx.mandatory && !r.reached[nx.id]) { gaidenSheet(nx); break; }
+        if (nx) moveTo(nx, nc.id); else completionSheet();
+        break;
+      }
+      case "recruit-now": {
+        var rc = chById(t.dataset.ch);
+        var ri = parseInt(t.dataset.i, 10);
+        var ru = unitsForItem(rc.items[ri]);
+        if (ru.length) recruitSheet(ru);
+        break;
+      }
       case "toggle": {
         var ch = chById(t.dataset.ch);
         var i = +t.dataset.i;
@@ -1876,6 +1903,7 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
         break;
       case "open-settings": settingsSheet(); break;
+      case "tab": state.ui.tab = t.dataset.v; save(); render(); break;
       case "toggle-setting": {
         var sv = t.dataset.v;
         state.settings[sv] = !state.settings[sv];
