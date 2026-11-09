@@ -49,6 +49,7 @@ a{color:var(--gold)}
   border-radius:999px;padding:7px 12px;font-size:12.5px;color:var(--muted);
 }
 .runChip b{color:var(--text);font-weight:600}
+.topRight{display:flex;align-items:center;gap:4px;flex:0 0 auto}
 .games{display:flex;gap:2px;border:1px solid var(--line);border-radius:999px;padding:2px;background:var(--surface);flex:0 0 auto}
 .games button{padding:5px 9px;border-radius:999px;font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.02em}
 .games button.on{background:var(--gold);color:#171307}
@@ -348,6 +349,13 @@ table.plain td{padding:7px 8px;border-bottom:1px solid rgba(42,49,60,.6);vertica
 .talkWho{font-size:13px;font-weight:550}
 .talkSum{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:1px}
 .talkTrig{font-size:11px;color:var(--dim);margin-top:2px}
+.planStyle{background:var(--goldSoft);border-left:2px solid var(--gold);padding:8px 10px;border-radius:6px;color:#E7C77E}
+.planSec{margin:10px 0}
+.planSec>b{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px}
+.planSec ol,.planSec ul{margin:0;padding-left:18px;font-size:13px;line-height:1.55;color:#C9D0DB}
+.planSec li{margin-bottom:4px}
+.promoGains{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.promoGains b{font-weight:600}
 
 .empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:13.5px}
 .empty b{display:block;color:var(--text);margin-bottom:4px;font-size:15px}
@@ -355,6 +363,8 @@ table.plain td{padding:7px 8px;border-bottom:1px solid rgba(42,49,60,.6);vertica
 /* ---------- desktop ---------- */
 @media (min-width:900px){
   body{font-size:15px}
+  .sheet{align-items:center}
+  .sheetCard{border-radius:18px;max-height:80vh;padding-bottom:18px}
   .app{padding:18px 20px 80px}
   .split{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;align-items:start}
   .chlist{position:sticky;top:104px;max-height:calc(100vh - 120px);overflow:auto;padding-right:2px}

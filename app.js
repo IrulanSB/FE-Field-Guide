@@ -32,18 +32,25 @@
   /* ---------------- state ---------------- */
   var state = load();
   var pendingClose = null;
+  var pendingRecruit = null;
   if (!state || !state.runs) state = { runs: [], active: null, game: "fe7", lastRun: {}, settings: {}, ui: { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" } };
   if (!state.ui) state.ui = { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" };
   if (!state.game) state.game = "fe7";
   if (!state.lastRun) state.lastRun = {};
   if (!state.settings) state.settings = {};
-  if (state.settings.lore === undefined) state.settings.lore = true;
-  if (state.settings.boss === undefined) state.settings.boss = true;
-  if (state.settings.death === undefined) state.settings.death = true;
-  if (state.settings.endings === undefined) state.settings.endings = true;
+  if (state.settings.lore === undefined) state.settings.lore = false;
+  if (state.settings.boss === undefined) state.settings.boss = false;
+  if (state.settings.death === undefined) state.settings.death = false;
+  if (state.settings.endings === undefined) state.settings.endings = false;
+  if (state.settings.strategy === undefined) state.settings.strategy = true;
+  if (state.settings.steals === undefined) state.settings.steals = true;
+  if (state.settings.turnByTurn === undefined) state.settings.turnByTurn = true;
+  if (!state.settings.planStyle) state.settings.planStyle = "efficient";
   migrate();
   applyLore(window.FE7, window.FE7_LORE, window.FE7_UNIT_LORE);
   applyLore(window.FE8, window.FE8_LORE, window.FE8_UNIT_LORE);
+  applyPlans(window.FE7, window.FE7_PLANS);
+  applyPlans(window.FE8, window.FE8_PLANS);
   setGame(state.game);
   if (!state.active || !state.runs.filter(function (r) { return r.id === state.active && r.game === state.game; }).length) {
     state.active = state.lastRun[state.game] || null;
@@ -112,6 +119,16 @@
     var n = String(name).toLowerCase();
     for (var i = 0; i < DATA.units.length; i++) if (DATA.units[i].name.toLowerCase() === n) return DATA.units[i];
     return null;
+  }
+  function unitsForItem(it) {
+    var out = [], seen = {};
+    var text = (it.t + " " + (it.d || "")).toLowerCase();
+    DATA.units.forEach(function (u) {
+      var hit = it.u === u.id;
+      if (!hit && u.name.length > 3 && text.indexOf(u.name.toLowerCase()) >= 0) hit = true;
+      if (hit && !seen[u.id]) { seen[u.id] = 1; out.push(u); }
+    });
+    return out;
   }
   function numFor(ch, mode) {
     if (mode === "hector" && ch.numH) return ch.numH;
@@ -367,9 +384,10 @@
       var sel = state.ui.sel === ch.id ? " sel" : "";
       var tag = ch.gaiden ? '<span class="tag miss">G</span>' : "";
       var ex = exploitsFor(ch).length ? '<span class="tag exploit">⚡</span>' : "";
+      var stb = stealsFor(ch).length ? '<span class="tag exploit">S</span>' : "";
       html += '<div class="ch"><button class="chrow' + sel + '" data-act="open-ch" data-id="' + ch.id + '">' +
         '<span class="num">' + esc(numFor(ch, r.mode)) + '</span>' +
-        '<span class="nm">' + esc(ch.title) + '</span>' + tag + ex +
+        '<span class="nm">' + esc(ch.title) + '</span>' + tag + ex + stb +
         '<span class="pr' + (p.total && p.done >= p.total ? " full" : "") + '">' + (p.total ? p.done + "/" + p.total + (p.assumed ? " ~" : "") : "—") + '</span>' +
         '<span class="dot ' + cls + '"></span>' +
         '</button></div>';
@@ -459,6 +477,10 @@
       h += '</div>';
     }
 
+    h += renderPlan(ch, r);
+    h += renderTalks(ch);
+    h += renderLore(ch);
+
     var exs = exploitsFor(ch);
     if (exs.length) {
       h += '<div class="sect"><div class="sectH"><h4>Exploits available here</h4></div>';
@@ -469,9 +491,6 @@
       });
       h += '</div>';
     }
-
-    h += renderTalks(ch);
-    h += renderLore(ch);
 
     h += '<div class="notes"><div class="lbl">Notes</div>' +
       '<textarea data-notes="' + ch.id + '" placeholder="What happened? Who got what?">' + esc(r.notes[ch.id] || "") + '</textarea></div>';
@@ -806,6 +825,20 @@
     if (!core.length) h += '<div class="empty"><b>No core yet</b>Open Roster and set a few units to Core.</div>';
     h += '</div>';
 
+    var needs = core.filter(function (u) { return promoItem(u) !== "—" && !r.promos[u.id]; });
+    if (needs.length) {
+      h += '<div class="sect"><div class="sectH"><h4>Still needs a promotion item</h4></div>';
+      needs.forEach(function (u) {
+        var low = u.tier === "C" ? ' <span class="tag verify">Tier C</span>' : '';
+        h += '<div class="auditRow"><div style="flex:1"><div style="font-size:13px">' + esc(u.name) + low + '</div>' +
+          '<div class="tiny muted">' + esc(promoItem(u)) + ' · ' + esc(u.cls) + '</div></div>' +
+          '<span class="tag">' + (r.levels[u.id] ? "Lv " + r.levels[u.id] : "—") + '</span></div>';
+      });
+      h += '</div>';
+    }
+    var noPromo = core.filter(function (u) { return promoItem(u) !== "—" && !r.promos[u.id] && u.tier === "C"; });
+    if (noPromo.length) h += '<div class="small" style="color:#DFAE5C;margin-top:8px">' + esc(noPromo.map(function (u) { return u.name; }).join(", ")) + ' are Tier C — a seal here is a deliberate choice, not an accident.</div>';
+
     h += '<div class="sect"><div class="sectH"><h4>Stat boosters</h4></div>';
     BOOSTERS.forEach(function (b) {
       h += '<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line)">' +
@@ -1056,6 +1089,13 @@
     });
   }
 
+  function applyPlans(game, plans) {
+    if (!game || !plans) return;
+    (game.chapters || []).concat(game.dungeons || []).forEach(function (c) {
+      if (plans[c.id]) c.plan = plans[c.id];
+    });
+  }
+
   function visibleTalks(ch) {
     return (ch.talks || []).filter(function (t) {
       if (t.k === "boss" && !state.settings.boss) return false;
@@ -1088,6 +1128,81 @@
     return h;
   }
 
+  function stealsFor(ch) {
+    return (ch.items || []).filter(function (it) { return /steal/i.test(it.d || ""); });
+  }
+  function isKeyItem(t) { return /Seal|Card|Boots|Crest|Ring|Whip|Bolt|Contract|Robe|Drops|Gem|Blade|Sword|Lance|Axe|Bow/.test(t); }
+
+  function deriveBring(ch) {
+    var out = ["Healer"];
+    if ((ch.items || []).some(function (i) { return i.k === "chest"; })) out.push("Thief + Chest Keys");
+    if ((ch.items || []).some(function (i) { return i.k === "village"; })) out.push("Mounted units for villages");
+    if ((ch.items || []).some(function (i) { return i.k === "shop"; })) out.push("Member Card");
+    if (ch.turn && ch.turn.limit) out.push("Fast units — turn limit");
+    return out.join(" · ");
+  }
+  function deriveSteps(ch, r) {
+    var s = [];
+    if (ch.obj) s.push("Objective: " + ch.obj + ".");
+    if (ch.side && (!ch.side.mode || ch.side.mode === r.mode)) s.push("Unlock " + ch.side.title + " — " + ch.side.req);
+    if (turnLimitApplies(ch, r)) s.push(ch.turn.label || ("Finish within " + ch.turn.limit + " turns."));
+    if ((ch.items || []).some(function (i) { return i.k === "chest"; })) s.push("Open every chest before you kill the boss.");
+    if ((ch.items || []).some(function (i) { return i.k === "village"; })) s.push("Reach the villages before enemy thieves or the boss trigger the end.");
+    if (ch.branch) s.push("Record the branch decision so the checklist matches your map.");
+    return s;
+  }
+  function deriveBoss(ch) {
+    var drop = (ch.items || []).filter(function (i) { return /^Dropped by/i.test(i.d || ""); })[0];
+    if (!drop) return "";
+    return "Boss drop: " + drop.t + " — " + drop.d + ".";
+  }
+  function planFor(ch, r) {
+    var p = ch.plan || {};
+    var style = state.settings.planStyle || "efficient";
+    return {
+      style: style,
+      styleNote: p[style] || "",
+      deploy: p.deploy || ch.deploy || "",
+      bring: p.bring || deriveBring(ch),
+      steps: p.steps || deriveSteps(ch, r),
+      threats: p.threats || ch.warnings || [],
+      boss: p.boss || deriveBoss(ch),
+      exp: p.exp || "",
+      fallback: p.fallback || ""
+    };
+  }
+
+  function renderPlan(ch, r) {
+    if (!state.settings.strategy) return "";
+    if (!ch.obj && !ch.items.length) return "";
+    var p = planFor(ch, r);
+    var label = p.style === "ltc" ? "Low turns" : p.style === "completionist" ? "Completionist" : "Efficient";
+    var h = '<details class="loreBox"' + (state.ui.openPlan === ch.id ? " open" : "") + '><summary class="loreSum">Optimal plan · ' + label + '</summary><div class="loreBody">';
+    if (p.styleNote) h += '<p class="planStyle">' + esc(p.styleNote) + '</p>';
+    if (p.deploy) h += '<p><b>Deploy:</b> ' + esc(p.deploy) + '</p>';
+    if (p.bring) h += '<p><b>Bring:</b> ' + esc(p.bring) + '</p>';
+    if (p.steps && p.steps.length) {
+      h += '<div class="planSec"><b>Steps</b><ol>' + p.steps.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ol></div>';
+    }
+    if (p.threats && p.threats.length) {
+      h += '<div class="planSec"><b>Threats</b><ul>' + p.threats.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ul></div>';
+    }
+    if (p.boss) h += '<p><b>Boss:</b> ' + esc(p.boss) + '</p>';
+    if (p.exp) h += '<p><b>EXP:</b> ' + esc(p.exp) + '</p>';
+    var st = stealsFor(ch);
+    if (state.settings.steals && st.length) {
+      h += '<div class="planSec"><b>Steal before you kill</b><div class="tiny muted" style="margin:2px 0 5px">Steal works when your Speed is higher than the target\'s and your Constitution covers the item\'s weight. Promoted thieves count.</div><ul>';
+      st.forEach(function (it) {
+        h += '<li>' + esc(it.t) + ' — ' + esc(it.d.replace(/^Steal from\s*/i, "from ")) + (isKeyItem(it.t) ? ' <span class="tag miss">Priority</span>' : '') + '</li>';
+      });
+      h += '</ul></div>';
+    }
+    if (p.fallback) h += '<p><b>If it goes wrong:</b> ' + esc(p.fallback) + '</p>';
+    h += '</div></details>';
+    return h;
+  }
+
+
   function renderLore(ch) {
     var h = "";
     if (ch.lore && state.settings.lore) {
@@ -1108,6 +1223,22 @@
   }
   function closeSheet() { sheet.hidden = true; }
 
+  function settingsSheet() {
+    var s = state.settings;
+    var toggles = [["lore", "Lore"], ["boss", "Boss quotes"], ["death", "Death quotes"], ["endings", "Endings"], ["strategy", "Optimal plans"], ["steals", "Steal list"], ["turnByTurn", "Turn-by-turn steps"]];
+    var body = '<div class="stack"><p class="small muted" style="margin:0">Global settings — one set for every run and both games.</p><div class="row wrap" style="gap:6px">' +
+      toggles.map(function (x) {
+        var on = s[x[0]];
+        return '<button class="btn ' + (on ? "gold" : "") + '" data-act="toggle-setting" data-v="' + x[0] + '">' + x[1] + ': ' + (on ? "On" : "Off") + '</button>';
+      }).join("") + '</div>' +
+      '<div class="kicker" style="margin-top:10px">Plan style</div>' +
+      '<div class="row wrap" style="gap:6px">' +
+      [["efficient", "Efficient"], ["ltc", "Low turns"], ["completionist", "Completionist"]].map(function (x) {
+        return '<button class="btn ' + (s.planStyle === x[0] ? "gold" : "") + '" data-act="set-style" data-v="' + x[0] + '">' + x[1] + '</button>';
+      }).join("") + '</div></div>';
+    openSheet("Settings", body);
+  }
+
   function runSheet() {
     var r = run();
     var body = "";
@@ -1124,12 +1255,7 @@
           '<span>' + esc(x.name) + '</span><span class="tiny dim">' + esc(modeName(x.mode)) + '</span></button>';
       });
       body += '<hr class="sep"><button class="btn gold wide" data-act="new-run">New run</button>' +
-        '<div class="kicker" style="margin-top:14px">Content settings</div>' +
-        '<div class="row wrap" style="gap:6px">' +
-        [["lore", "Lore"], ["boss", "Boss quotes"], ["death", "Death quotes"], ["endings", "Endings"]].map(function (x) {
-          var on = state.settings[x[0]];
-          return '<button class="btn ' + (on ? "gold" : "") + '" data-act="toggle-setting" data-v="' + x[0] + '">' + x[1] + ': ' + (on ? "On" : "Off") + '</button>';
-        }).join("") + '</div>' +
+        '<button class="btn wide" data-act="open-settings" style="margin-top:8px">Settings</button>' +
         '<div class="row" style="gap:8px;margin-top:10px"><button class="btn wide" data-act="export">Export</button><button class="btn wide" data-act="import">Import</button></div>' +
         '<p class="tiny dim">Export writes a JSON file of every run. Import replaces everything on this device.</p>' +
         '</div>';
@@ -1151,6 +1277,29 @@
       '<button class="btn gold wide" data-act="create-run">Create</button></div>');
   }
 
+  function recruitSheet(units) {
+    var r = run();
+    pendingRecruit = units.map(function (u) { return u.id; });
+    var rows = units.map(function (u) {
+      var cur = r.roster[u.id] || "";
+      return '<div class="row" style="gap:8px;padding:8px 0;border-bottom:1px solid var(--line)">' +
+        '<div style="flex:1"><div style="font-size:13.5px;font-weight:600">' + esc(u.name) + '</div>' +
+        (cur ? '<div class="tiny" style="color:#DFAE5C">Currently ' + esc(cur) + '</div>' : '<div class="tiny dim">New</div>') + '</div>' +
+        '<input class="lvlInput" type="number" min="1" max="20" placeholder="Lv" data-rlvl="' + u.id + '">' +
+        '<select data-rstatus="' + u.id + '" style="min-height:36px;background:var(--surface2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:0 8px;font:inherit;font-size:12px">' +
+        (cur ? '<option value="keep" selected>Keep ' + esc(cur) + '</option>' : '') +
+        '<option value="bench"' + (!cur ? " selected" : "") + '>Bench</option>' +
+        '<option value="core">Core</option>' +
+        '<option value="dead">Dead</option>' +
+        '</select></div>';
+    }).join("");
+    openSheet("Recruited",
+      '<div class="stack"><p class="small muted" style="margin:0">' + units.length + ' unit' + (units.length === 1 ? "" : "s") + '. They go to the bench unless you choose otherwise.</p>' +
+      rows +
+      '<button class="btn gold wide" data-act="apply-recruit">Add to roster</button></div>');
+  }
+
+
   function unitSheet(id) {
     var r = run();
     var u = unitById(id);
@@ -1170,11 +1319,21 @@
       [["core", "Core"], ["bench", "Bench"], ["dead", "Dead"], ["", "Clear"]].map(function (x) {
         return '<button class="btn ' + (st === x[0] ? "gold" : "") + '" data-act="set-roster" data-u="' + u.id + '" data-v="' + x[0] + '">' + x[1] + '</button>';
       }).join("") + '</div></div></div>';
-    if (u.promos && u.promos.length) {
+    var promos = (u.promos && u.promos.length) ? u.promos : (u.cls.indexOf("→") >= 0 ? [u.cls.split("→")[1].trim()] : []);
+    if (promos.length) {
       body += '<div><div class="kicker" style="margin-bottom:5px">Promotion branch</div><div class="row wrap" style="gap:6px">' +
-        u.promos.map(function (p) {
+        promos.map(function (p) {
           return '<button class="btn ' + (r.promos[u.id] === p ? "gold" : "") + '" data-act="set-promo" data-u="' + u.id + '" data-v="' + esc(p) + '">' + esc(p) + '</button>';
-        }).join("") + '</div></div>';
+        }).join("") + '</div>';
+      var table = (window.PROMO && window.PROMO[DATA.id]) || {};
+      body += '<div class="promoGains">' + promos.map(function (p) {
+        var key = p.replace(/\s*\(.*\)$/, "");
+        var info = table[key];
+        return '<div class="tiny muted"><b style="color:var(--text)">' + esc(p) + '</b>' + (info ? ' · ' + esc(info.g) + (info.w ? ' · ' + esc(info.w) : '') : '') + '</div>';
+      }).join("") + '</div>';
+      if (/Journeyman|Recruit|Pupil/.test(u.cls)) {
+        body += '<div class="small" style="color:#DFAE5C;margin-top:4px">Trainee: first promotion at level 10 (trainee seal or automatic), then a normal seal at level 10+.</div>';
+      }
     }
     if (u.death) {
       body += '<details class="loreBox"><summary class="loreSum">Death quote</summary><div class="loreBody"><p>' + esc(u.death) + '</p></div></details>';
@@ -1471,6 +1630,13 @@
           }
         }
         toggleItem(r, ch, i);
+        var itm = ch.items[i];
+        var nowChecked = !!r.checked[key];
+        if (itm && itm.k === "recruit") {
+          var recUnits = unitsForItem(itm);
+          if (nowChecked && recUnits.length) { save(); recruitSheet(recUnits); break; }
+          if (!nowChecked) { recUnits.forEach(function (u) { delete r.roster[u.id]; }); }
+        }
         save();
         if (chapterDone(ch, r)) { afterClose(ch); }
         else { render(); }
@@ -1552,10 +1718,16 @@
         closeSheet(); save(); render();
         window.scrollTo({ top: 0, behavior: "smooth" });
         break;
+      case "open-settings": settingsSheet(); break;
       case "toggle-setting": {
         var sv = t.dataset.v;
         state.settings[sv] = !state.settings[sv];
-        save(); render();
+        save(); render(); settingsSheet();
+        break;
+      }
+      case "set-style": {
+        state.settings.planStyle = t.dataset.v;
+        save(); render(); settingsSheet();
         break;
       }
       case "unit":
@@ -1576,6 +1748,21 @@
         var target = t.dataset.v === "eirika" ? "c9a" : "c9b";
         save(); closeSheet();
         moveTo(chById(target), r.chapterId);
+        break;
+      }
+      case "apply-recruit": {
+        if (!pendingRecruit) break;
+        pendingRecruit.forEach(function (id) {
+          var sel = document.querySelector('[data-rstatus="' + id + '"]');
+          if (sel && sel.value && sel.value !== "keep") r.roster[id] = sel.value;
+          var lv = document.querySelector('[data-rlvl="' + id + '"]');
+          if (lv && lv.value) {
+            var n = parseInt(lv.value, 10);
+            if (!isNaN(n) && n > 0) r.levels[id] = n;
+          }
+        });
+        pendingRecruit = null;
+        save(); closeSheet(); render();
         break;
       }
       case "set-promo": {
@@ -1693,6 +1880,7 @@
   });
 
   document.getElementById("runChip").addEventListener("click", runSheet);
+  document.getElementById("gear").addEventListener("click", settingsSheet);
   document.getElementById("tabs").addEventListener("click", function (e) {
     var b = e.target.closest("button[data-tab]");
     if (!b) return;
