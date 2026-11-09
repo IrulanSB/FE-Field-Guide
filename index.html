@@ -23,6 +23,7 @@
   </div>
   <div class="games" id="games"></div>
   <div class="topRight">
+    <button class="iconBtn" id="searchBtn" aria-label="Search">⌕</button>
     <button class="iconBtn" id="gear" aria-label="Settings">⚙</button>
     <button class="runChip" id="runChip" aria-label="Switch run"></button>
   </div>
@@ -35,6 +36,11 @@
   <button data-tab="supports">Supports</button>
   <button data-tab="more">More</button>
 </nav>
+</div>
+
+<div id="searchPanel" class="searchPanel" hidden>
+  <input class="search" id="searchTop" placeholder="Search items, chapters, units, talks…" autocomplete="off">
+  <div id="searchTopResults" class="searchTopResults"></div>
 </div>
 
 <main id="app" class="app"></main>

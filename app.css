@@ -325,6 +325,12 @@ table.plain td{padding:7px 8px;border-bottom:1px solid rgba(42,49,60,.6);vertica
 .toast[hidden]{display:none}
 .toast button{color:var(--gold);font-weight:700;font-size:12.5px;padding:4px 8px;border-radius:99px;background:var(--goldSoft);pointer-events:auto;flex:0 0 auto}
 body.sheet-open .toast{bottom:auto;top:calc(14px + env(safe-area-inset-top))}
+.searchPanel{padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:38;max-height:60vh;overflow:auto}
+.searchPanel[hidden]{display:none}
+.searchPanel .search{max-width:720px;margin:0 auto;display:block}
+.searchTopResults{max-width:720px;margin:8px auto 0}
+.searchTopResults .res{cursor:pointer}
+body.sheet-open .searchPanel{z-index:70}
 
 .tag.exploit{color:#E7C77E;border-color:rgba(200,162,74,.35);background:var(--goldSoft)}
 .lvlInput{width:64px;min-height:36px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);padding:0 8px;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}

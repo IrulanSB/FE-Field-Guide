@@ -981,9 +981,44 @@
     return h;
   }
 
+  /* ---------------- top search ---------------- */
+  function closeSearchPanel() {
+    var p = document.getElementById("searchPanel");
+    if (p) p.hidden = true;
+  }
+  function renderTopSearch() {
+    var el = document.getElementById("searchTop");
+    var box = document.getElementById("searchTopResults");
+    if (!el || !box) return;
+    var q = el.value.trim().toLowerCase();
+    var r = run();
+    if (!r) { box.innerHTML = '<div class="empty">No run yet.</div>'; return; }
+    if (!q) { box.innerHTML = ""; return; }
+    var res = [];
+    chaptersFor(r.mode).forEach(function (ch) {
+      if ((ch.title + " " + ch.num + " " + ch.obj).toLowerCase().indexOf(q) >= 0) res.push({ t: "Ch." + numFor(ch, r.mode) + " " + ch.title, s: ch.obj, ch: ch });
+      if (state.settings.spoilers && ch.lore && (ch.title + " " + ch.lore).toLowerCase().indexOf(q) >= 0) res.push({ t: "Lore — " + ch.title, s: "Chapter lore", ch: ch });
+      if (state.settings.spoilers) (ch.talks || []).forEach(function (t) {
+        if ((t.who + " " + (t.sum || "")).toLowerCase().indexOf(q) >= 0) res.push({ t: "Talk — " + t.who, s: ch.title, ch: ch });
+      });
+      branchFilter(ch, r).forEach(function (x) {
+        if ((x.it.t + " " + (x.it.d || "")).toLowerCase().indexOf(q) >= 0) res.push({ t: x.it.t, s: "Ch." + numFor(ch, r.mode) + " · " + (KIND_LABEL[x.it.k] || x.it.k), ch: ch });
+      });
+    });
+    DATA.units.forEach(function (u) {
+      if ((u.name + " " + u.cls + " " + u.note + " " + (state.settings.spoilers ? (u.bio || "") : "")).toLowerCase().indexOf(q) >= 0) res.push({ t: u.name, s: u.cls + " · " + u.tier + "-tier", unit: u });
+    });
+    if (!res.length) { box.innerHTML = '<div class="empty" style="padding:14px"><b>No match</b>Try a shorter word.</div>'; return; }
+    box.innerHTML = res.slice(0, 14).map(function (x) {
+      var act = x.unit ? "unit" : "jump";
+      return '<div class="res row" data-act="' + act + '" ' + (x.unit ? 'data-u="' + x.unit.id + '"' : 'data-id="' + x.ch.id + '"') + '>' +
+        '<div style="flex:1"><div style="font-size:13.5px">' + esc(x.t) + '</div><div class="tiny muted">' + esc(x.s) + '</div></div><span class="dim">→</span></div>';
+    }).join("");
+  }
+
   /* ---------------- more ---------------- */
   function viewMore(r) {
-    var items = [["recruits", "Recruits"], ["items", "Items"], ["gaidens", "Gaidens"], ["audit", "Audit"], ["search", "Search"], ["exploits", "Exploits"], ["strategy", "Strategy"]];
+    var items = [["recruits", "Recruits"], ["items", "Items"], ["gaidens", "Gaidens"], ["audit", "Audit"], ["exploits", "Exploits"], ["strategy", "Strategy"]];
     var h = '<div class="kicker">More</div><h2 class="title" style="margin-bottom:12px">Reference</h2><div class="ulist">';
     items.forEach(function (x) {
       h += '<button class="u" style="width:100%;text-align:left" data-act="tab" data-v="' + x[0] + '">' +
@@ -1323,13 +1358,8 @@
       var st = checkState(r, ch, x.i);
       var us = x.it.k === "recruit" ? unitsForItem(x.it) : [];
       var recruited = !!st || us.some(function (u) { return r.roster[u.id] === "core" || r.roster[u.id] === "bench"; });
-      if (us.length) {
-        h += '<li><button class="btn ghost tiny" data-act="recruit-toggle" data-ch="' + ch.id + '" data-i="' + x.i + '">' + (recruited ? "✓ Recruited" : "Recruited") + '</button>' +
-          '<span class="tag">' + esc(kinds[x.it.k]) + '</span> <span>' + esc(x.it.t) + '</span></li>';
-      } else {
-        h += '<li><button class="talkTick' + (st ? " on" : "") + '" data-act="toggle" data-ch="' + ch.id + '" data-i="' + x.i + '" aria-label="Mark">' + (st ? "✓" : "○") + '</button>' +
-          '<span class="tag">' + esc(kinds[x.it.k]) + '</span> <span>' + esc(x.it.t) + '</span></li>';
-      }
+      h += '<li><button class="talkTick' + (recruited ? " on" : "") + '" data-act="toggle" data-ch="' + ch.id + '" data-i="' + x.i + '" aria-label="Mark">' + (recruited ? "✓" : "○") + '</button>' +
+        '<span class="tag">' + esc(kinds[x.it.k]) + '</span> <span>' + esc(x.it.t) + '</span></li>';
     });
     h += '</ul></div>';
     return h;
@@ -1761,7 +1791,7 @@
         save(); closeSheet(); render();
         break;
       case "jump":
-        r.chapterId = t.dataset.id; state.ui.tab = "chapters"; save(); closeSheet(); render();
+        r.chapterId = t.dataset.id; state.ui.tab = "chapters"; save(); closeSheet(); closeSearchPanel(); render();
         break;
       case "next-chapter": {
         var nc = chById(t.dataset.id);
@@ -1783,6 +1813,19 @@
         var ch = chById(t.dataset.ch);
         var i = +t.dataset.i;
         toggleItem(r, ch, i);
+        var it = ch.items[i];
+        var nowOn = !!r.checked[itemKey(ch, i)];
+        if (it && it.k === "recruit") {
+          var us = unitsForItem(it);
+          us.forEach(function (u) {
+            if (nowOn) {
+              if (!r.roster[u.id] || r.roster[u.id] === "dead") r.roster[u.id] = "bench";
+              if (!r.levels[u.id]) r.levels[u.id] = u.joinLevel || 1;
+            } else {
+              delete r.roster[u.id];
+            }
+          });
+        }
         save(); render();
         break;
       }
@@ -1893,7 +1936,7 @@
         break;
       }
       case "unit":
-        if (t.dataset.u) unitSheet(t.dataset.u);
+        if (t.dataset.u) { closeSearchPanel(); unitSheet(t.dataset.u); }
         break;
       case "pair": pairSheet(t.dataset.a, t.dataset.b); break;
       case "set-rank": {
@@ -1938,6 +1981,14 @@
         if (v === "") delete r.roster[u]; else r.roster[u] = v;
         if (v === "core" && r.team.indexOf(u) < 0) r.team.push(u);
         if (v !== "core") r.team = r.team.filter(function (x) { return x !== u; });
+        DATA.chapters.forEach(function (c) {
+          branchFilter(c, r).forEach(function (x) {
+            if (x.it.k !== "recruit") return;
+            if (!unitsForItem(x.it).some(function (y) { return y.id === u; })) return;
+            var k = itemKey(c, x.i);
+            if (v === "core" || v === "bench") r.checked[k] = true; else delete r.checked[k];
+          });
+        });
         save(); closeSheet(); render();
         break;
       }
@@ -2044,6 +2095,19 @@
 
   document.getElementById("runChip").addEventListener("click", runSheet);
   document.getElementById("gear").addEventListener("click", settingsSheet);
+  document.getElementById("searchBtn").addEventListener("click", function () {
+    var p = document.getElementById("searchPanel");
+    p.hidden = !p.hidden;
+    if (!p.hidden) {
+      var i = document.getElementById("searchTop");
+      i.focus();
+      renderTopSearch();
+    }
+  });
+  document.getElementById("searchTop").addEventListener("input", renderTopSearch);
+  document.getElementById("searchTop").addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeSearchPanel();
+  });
   document.getElementById("tabs").addEventListener("click", function (e) {
     var b = e.target.closest("button[data-tab]");
     if (!b) return;
