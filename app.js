@@ -1150,7 +1150,7 @@
   function stealsFor(ch) {
     return (ch.items || []).filter(function (it) { return /steal/i.test(it.d || ""); });
   }
-  function isKeyItem(t) { return /Seal|Card|Boots|Crest|Ring|Whip|Bolt|Contract|Robe|Drops|Gem|Blade|Sword|Lance|Axe|Bow|Shield|Tome|Staff/.test(t); }
+  function isKeyItem(t) { return /seal|card|boots|crest|ring|whip|bolt|contract|robe|drops|gem|blade|sword|lance|axe|bow|shield|tome|staff|book|icon|wings|talisman/i.test(t); }
 
   function deriveBring(ch) {
     var out = ["Healer"];
