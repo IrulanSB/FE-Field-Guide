@@ -429,16 +429,6 @@
       '<button class="btn ghost" data-act="ch-menu" data-id="' + ch.id + '" style="min-height:34px;padding:0 10px">•••</button>' +
       '</div>';
     h += '<div class="obj"><b style="color:var(--text)">Objective:</b> ' + esc(ch.obj) + '</div>';
-    if (ch.deploy) h += '<div class="small muted" style="margin:-4px 0 10px"><b style="color:var(--text);font-weight:600">Bring:</b> ' + esc(ch.deploy) + '</div>';
-    if (ch.brief) h += '<p class="brief">' + esc(ch.brief) + '</p>';
-    var rw = rosterWarnings(ch, r);
-    if (rw.length) {
-      h += '<div class="conflict"><b>Roster warning</b>' +
-        rw.map(function (w) { return '<div class="small">' + esc(w) + '</div>'; }).join("") + '</div>';
-    }
-
-    h += renderPlan(ch, r);
-    h += renderFullClear(ch, r);
 
     if (ch.side && (!ch.side.mode || ch.side.mode === r.mode)) {
       h += '<div class="turnbox" style="border-color:rgba(200,162,74,.3)">' +
@@ -460,29 +450,32 @@
         '</div>';
     }
 
-    var items = branchFilter(ch, r);
-    if (!items.length) {
-      h += '<div class="empty"><b>Nothing missable here</b>Fight the map and move on.</div>';
+    var rw = rosterWarnings(ch, r);
+    if (rw.length) {
+      h += '<div class="conflict"><b>Roster warning</b>' +
+        rw.map(function (w) { return '<div class="small">' + esc(w) + '</div>'; }).join("") + '</div>';
     }
 
-    if (ch.warnings && ch.warnings.length) {
-      h += '<div class="sect"><div class="sectH"><h4>Watch out</h4></div>';
-      ch.warnings.forEach(function (w) { h += '<div class="small" style="color:#DFAE5C;padding:4px 0">⚠ ' + esc(w) + '</div>'; });
-      h += '</div>';
-    }
+    h += renderFullClear(ch, r);
 
+    if (state.settings.spoilers && ch.deploy) h += '<div class="small muted" style="margin:-4px 0 10px"><b style="color:var(--text);font-weight:600">Bring:</b> ' + esc(ch.deploy) + '</div>';
+    if (state.settings.spoilers && ch.brief) h += '<p class="brief">' + esc(ch.brief) + '</p>';
+
+    h += renderPlan(ch, r);
     h += renderTalks(ch);
     h += renderLore(ch);
 
-    var exs = exploitsFor(ch);
-    if (exs.length) {
-      h += '<div class="sect"><div class="sectH"><h4>Exploits available here</h4></div>';
-      exs.forEach(function (e, n) {
-        h += '<div class="auditRow"><div style="flex:1"><div style="font-size:13.5px">⚡ ' + esc(e.name) + '</div>' +
-          '<div class="tiny muted">' + esc(e.what) + '</div></div>' +
-          '<button class="btn ghost small go" data-act="exploit" data-i="' + DATA.exploits.indexOf(e) + '">Steps</button></div>';
-      });
-      h += '</div>';
+    if (state.settings.spoilers) {
+      var exs = exploitsFor(ch);
+      if (exs.length) {
+        h += '<div class="sect"><div class="sectH"><h4>Exploits available here</h4></div>';
+        exs.forEach(function (e, n) {
+          h += '<div class="auditRow"><div style="flex:1"><div style="font-size:13.5px">⚡ ' + esc(e.name) + '</div>' +
+            '<div class="tiny muted">' + esc(e.what) + '</div></div>' +
+            '<button class="btn ghost small go" data-act="exploit" data-i="' + DATA.exploits.indexOf(e) + '">Steps</button></div>';
+        });
+        h += '</div>';
+      }
     }
 
     if (ch.id === r.chapterId) {
@@ -1330,7 +1323,6 @@
   }
 
   function renderFullClear(ch, r) {
-    if (!state.settings.spoilers) return "";
     var kinds = { village: "Village", chest: "Chest", recruit: "Recruit", item: "Found", ruin: "Ruins", shop: "Shop" };
     var items = branchFilter(ch, r).filter(function (x) { return kinds[x.it.k]; });
     if (!items.length) return "";
