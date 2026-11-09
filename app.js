@@ -444,6 +444,11 @@
     h += '<div class="obj"><b style="color:var(--text)">Objective:</b> ' + esc(ch.obj) + '</div>';
     if (ch.deploy) h += '<div class="small muted" style="margin:-4px 0 10px"><b style="color:var(--text);font-weight:600">Bring:</b> ' + esc(ch.deploy) + '</div>';
     if (ch.brief) h += '<p class="brief">' + esc(ch.brief) + '</p>';
+    var rw = rosterWarnings(ch, r);
+    if (rw.length) {
+      h += '<div class="conflict"><b>Roster warning</b>' +
+        rw.map(function (w) { return '<div class="small">' + esc(w) + '</div>'; }).join("") + '</div>';
+    }
 
     if (ch.side && (!ch.side.mode || ch.side.mode === r.mode)) {
       h += '<div class="turnbox" style="border-color:rgba(200,162,74,.3)">' +
@@ -684,6 +689,11 @@
 
     var h = '<div class="kicker">Supports</div><h2 class="title" style="margin-bottom:2px">The 5-level budget</h2>' +
       '<p class="muted small" style="margin-bottom:12px">C costs 1 level, B costs 2, A costs 3. Every unit can hold 5 levels total. Tap a cell to set the rank.</p>';
+    var recs = recommendSupportPairs(r, 6);
+    if (recs.length) {
+      h += '<div class="card" style="margin-bottom:12px;background:var(--surface2)"><div class="kicker">Recommended A-ranks</div>' +
+        recs.map(function (x) { return '<div class="small" style="margin-top:4px">' + esc(x.a.name) + " × " + esc(x.b.name) + '</div>'; }).join("") + '</div>';
+    }
     h += '<div class="filters">' +
       [['rec', 'High value'], ['avail', 'My roster'], ['all', 'All pairs']].map(function (x) {
         return '<button class="' + (f === x[0] ? "on" : "") + '" data-act="supp-filter" data-v="' + x[0] + '">' + x[1] + '</button>';
@@ -857,6 +867,20 @@
     }
     var noPromo = core.filter(function (u) { return promoItem(u) !== "—" && !r.promos[u.id] && u.tier === "C"; });
     if (noPromo.length) h += '<div class="small" style="color:#DFAE5C;margin-top:8px">' + esc(noPromo.map(function (u) { return u.name; }).join(", ")) + ' are Tier C — a seal here is a deliberate choice, not an accident.</div>';
+
+    var idx = orderIndex(r.mode, r.chapterId);
+    var target = Math.max(1, Math.min(20, Math.round(Math.max(0, idx) * 0.55) + 1));
+    if (core.length) {
+      h += '<div class="sect"><div class="sectH"><h4>Training · target Lv ' + target + '</h4></div>';
+      core.forEach(function (u) {
+        var lv = r.levels[u.id];
+        var behind = lv && lv < target - 2;
+        h += '<div class="auditRow"><div style="flex:1"><div style="font-size:13px">' + esc(u.name) + '</div>' +
+          '<div class="tiny muted">' + (lv ? "Lv " + lv : "level not set") + ' · target ' + target + '</div></div>' +
+          (behind ? '<span class="tag verify">Behind</span>' : lv ? '<span class="tag rec">On curve</span>' : '<span class="tag">—</span>') + '</div>';
+      });
+      h += '</div>';
+    }
 
     h += '<div class="sect"><div class="sectH"><h4>Stat boosters</h4></div>';
     BOOSTERS.forEach(function (b) {
@@ -1147,6 +1171,23 @@
     return h;
   }
 
+  function rosterWarnings(ch, r) {
+    var out = [];
+    var text = [ch.obj, ch.brief, ch.deploy, (ch.warnings || []).join(" "), ch.plan ? JSON.stringify(ch.plan) : ""].join(" ");
+    DATA.units.forEach(function (u) {
+      if (r.roster[u.id] === "dead" && text.indexOf(u.name) >= 0) out.push(u.name + " is dead — steps naming them are unavailable.");
+    });
+    var thieves = DATA.units.filter(function (u) { return /thief|rogue|assassin/i.test(u.cls); });
+    var aliveThieves = thieves.filter(function (u) { return r.roster[u.id] === "core" || r.roster[u.id] === "bench"; });
+    if ((ch.items || []).some(function (i) { return i.k === "chest"; }) && !aliveThieves.length) {
+      out.push("This chapter has chests and no thief is in your roster. " + (thieves.length ? "Available: " + thieves.map(function (u) { return u.name; }).join(", ") + "." : ""));
+    }
+    if (/healer|staff/i.test(text) && !DATA.units.some(function (u) { return /cleric|priest|troubadour|monk|mage|shaman/i.test(u.cls) && (r.roster[u.id] === "core" || r.roster[u.id] === "bench"); })) {
+      out.push("The plan assumes healing and no staff unit is in your roster.");
+    }
+    return out;
+  }
+
   function stealsFor(ch) {
     return (ch.items || []).filter(function (it) { return /steal/i.test(it.d || ""); });
   }
@@ -1200,6 +1241,25 @@
     return groups;
   }
 
+  function recommendSupportPairs(r, limit) {
+    var list = supportsFor();
+    var roster = Object.keys(r.roster).filter(function (k) { return r.roster[k] === "core" || r.roster[k] === "bench"; });
+    var useRoster = roster.length > 0;
+    var out = [];
+    list.forEach(function (p) {
+      var a = unitById(p.a), b = unitById(p.b);
+      if (!a || !b) return;
+      if (useRoster && (roster.indexOf(p.a) < 0 || roster.indexOf(p.b) < 0)) return;
+      if (!useRoster && !((a.tier === "S" || a.tier === "A") && (b.tier === "S" || b.tier === "A"))) return;
+      if (r.supports && r.supports[pairKey(p.a, p.b)]) return;
+      var score = (4 - "SABC".indexOf(a.tier)) + (4 - "SABC".indexOf(b.tier));
+      out.push({ a: a, b: b, score: score });
+    });
+    out.sort(function (x, y) { return y.score - x.score; });
+    return out.slice(0, limit || 6);
+  }
+
+
   function supportIdeas(r) {
     var roster = Object.keys(r.roster).filter(function (k) { return r.roster[k] === "core" || r.roster[k] === "bench"; });
     if (roster.length < 2) return [];
@@ -1243,6 +1303,11 @@
     }
     if (p.boss) h += '<p><b>Boss:</b> ' + esc(p.boss) + '</p>';
     if (p.exp) h += '<p><b>EXP:</b> ' + esc(p.exp) + '</p>';
+    var ci = orderIndex(r.mode, ch.id);
+    if (ci >= 0 && r.team && r.team.length) {
+      var lvlTarget = Math.max(1, Math.min(20, Math.round(ci * 0.55) + 1));
+      h += '<p><b>Training:</b> keep your core within 2 levels of Lv ' + lvlTarget + '.</p>';
+    }
     var priorities = branchFilter(ch, r).filter(function (x) { return isKeyItem(x.it.t) && !isChecked(r, ch, x.i); }).map(function (x) { return x.it.t; });
     if (priorities.length) h += '<p><b>Priorities:</b> ' + esc(priorities.slice(0, 6).join(" · ")) + '</p>';
     if (turnLimitApplies(ch, r)) {
