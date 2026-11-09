@@ -32,11 +32,18 @@
   /* ---------------- state ---------------- */
   var state = load();
   var pendingClose = null;
-  if (!state || !state.runs) state = { runs: [], active: null, game: "fe7", lastRun: {}, ui: { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" } };
+  if (!state || !state.runs) state = { runs: [], active: null, game: "fe7", lastRun: {}, settings: {}, ui: { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" } };
   if (!state.ui) state.ui = { tab: "chapters", sel: null, recFilter: "all", itemFilter: "all", suppFilter: "rec", search: "" };
   if (!state.game) state.game = "fe7";
   if (!state.lastRun) state.lastRun = {};
+  if (!state.settings) state.settings = {};
+  if (state.settings.lore === undefined) state.settings.lore = true;
+  if (state.settings.boss === undefined) state.settings.boss = true;
+  if (state.settings.death === undefined) state.settings.death = true;
+  if (state.settings.endings === undefined) state.settings.endings = true;
   migrate();
+  applyLore(window.FE7, window.FE7_LORE, window.FE7_UNIT_LORE);
+  applyLore(window.FE8, window.FE8_LORE, window.FE8_UNIT_LORE);
   setGame(state.game);
   if (!state.active || !state.runs.filter(function (r) { return r.id === state.active && r.game === state.game; }).length) {
     state.active = state.lastRun[state.game] || null;
@@ -60,7 +67,7 @@
     return {
       id: uid(), name: name || "New run", mode: mode, diff: diff || "Normal", game: g,
       created: Date.now(), chapterId: first ? first.id : "",
-      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}, levels: {}, promos: {}
+      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}, levels: {}, promos: {}, seen: {}
     };
   }
   function migrate() {
@@ -69,7 +76,7 @@
       r.checked = r.checked || {}; r.turns = r.turns || {}; r.notes = r.notes || {};
       r.roster = r.roster || {}; r.team = r.team || []; r.boosters = r.boosters || {};
       r.branches = r.branches || {}; r.reached = r.reached || {}; r.supports = r.supports || {};
-      r.levels = r.levels || {}; r.promos = r.promos || {};
+      r.levels = r.levels || {}; r.promos = r.promos || {}; r.seen = r.seen || {};
     });
   }
   function run() {
@@ -462,6 +469,9 @@
       });
       h += '</div>';
     }
+
+    h += renderTalks(ch);
+    h += renderLore(ch);
 
     h += '<div class="notes"><div class="lbl">Notes</div>' +
       '<textarea data-notes="' + ch.id + '" placeholder="What happened? Who got what?">' + esc(r.notes[ch.id] || "") + '</textarea></div>';
@@ -903,18 +913,25 @@
     var res = [];
     chaptersFor(r.mode).forEach(function (ch) {
       if ((ch.title + " " + ch.num + " " + ch.obj).toLowerCase().indexOf(q) >= 0) res.push({ t: "Ch." + numFor(ch, r.mode) + " " + ch.title, s: ch.obj, ch: ch });
+      if (ch.lore && (ch.title + " " + ch.lore).toLowerCase().indexOf(q) >= 0) res.push({ t: "Lore — " + ch.title, s: "Chapter lore", ch: ch, jump: true });
+      (ch.talks || []).forEach(function (t) {
+        if ((t.who + " " + (t.sum || "") + " " + (t.trig || "")).toLowerCase().indexOf(q) >= 0) {
+          res.push({ t: "Talk — " + t.who, s: "Ch." + numFor(ch, r.mode) + " · " + (TALK_LABEL[t.k] || t.k), ch: ch, jump: true });
+        }
+      });
       branchFilter(ch, r).forEach(function (x) {
         if ((x.it.t + " " + (x.it.d || "")).toLowerCase().indexOf(q) >= 0) res.push({ t: x.it.t, s: "Ch." + numFor(ch, r.mode) + " · " + (KIND_LABEL[x.it.k] || x.it.k), ch: ch });
       });
     });
     DATA.units.forEach(function (u) {
-      if ((u.name + " " + u.cls + " " + u.note).toLowerCase().indexOf(q) >= 0) res.push({ t: u.name, s: u.cls + " · " + u.tier + "-tier", unit: u });
+      if ((u.name + " " + u.cls + " " + u.note + " " + (u.bio || "")).toLowerCase().indexOf(q) >= 0) res.push({ t: u.name, s: u.cls + " · " + u.tier + "-tier", unit: u });
     });
 
     h += '<div style="margin-top:12px">';
     if (!res.length) h += '<div class="empty"><b>No match</b>Try a shorter word.</div>';
     res.slice(0, 40).forEach(function (x) {
-      h += '<div class="res row" data-act="' + (x.unit ? "unit" : "jump") + '" ' + (x.unit ? 'data-u="' + x.unit.id + '"' : 'data-id="' + x.ch.id + '"') + '>' +
+      var act = x.unit ? "unit" : x.jump ? "jump-open" : "jump";
+      h += '<div class="res row" data-act="' + act + '" ' + (x.unit ? 'data-u="' + x.unit.id + '"' : 'data-id="' + x.ch.id + '"') + '>' +
         '<div style="flex:1"><div style="font-size:13.5px">' + esc(x.t) + '</div><div class="tiny muted">' + esc(x.s) + '</div></div><span class="dim">→</span></div>';
     });
     h += '</div>';
@@ -1020,6 +1037,69 @@
     openSheet(e.name, '<div class="stack">' + exploitCard(e) + '</div>');
   }
 
+  /* ---------------- talks & lore ---------------- */
+  var TALK_LABEL = { recruit: "Recruit", npc: "NPC", unit: "Unit", boss: "Boss", event: "Event", death: "Death" };
+
+  function applyLore(game, lore, unitLore) {
+    if (!game) return;
+    var chapters = (game.chapters || []).concat(game.dungeons || []);
+    chapters.forEach(function (c) {
+      var x = lore && lore[c.id];
+      if (!x) return;
+      if (x.lore) c.lore = x.lore;
+      if (x.talks) c.talks = x.talks;
+      if (x.trivia) c.trivia = x.trivia;
+    });
+    if (unitLore) (game.units || []).forEach(function (u) {
+      var x = unitLore[u.id];
+      if (x) { if (x.bio) u.bio = x.bio; if (x.death) u.death = x.death; if (x.endings) u.endings = x.endings; if (x.theme) u.theme = x.theme; }
+    });
+  }
+
+  function visibleTalks(ch) {
+    return (ch.talks || []).filter(function (t) {
+      if (t.k === "boss" && !state.settings.boss) return false;
+      if (t.k === "death" && !state.settings.death) return false;
+      return true;
+    });
+  }
+
+  function renderTalks(ch) {
+    var talks = visibleTalks(ch);
+    if (!talks.length) return "";
+    var groups = {};
+    talks.forEach(function (t, i) { (groups[t.k] = groups[t.k] || []).push({ t: t, i: i }); });
+    var h = '<details class="loreBox"' + (state.ui.openTalks === ch.id ? " open" : "") + '><summary class="loreSum">Talks &amp; events · ' + talks.length + '</summary>';
+    ["recruit", "npc", "unit", "boss", "event", "death"].forEach(function (k) {
+      if (!groups[k]) return;
+      h += '<div class="talkGroup"><div class="talkH">' + esc(TALK_LABEL[k] || k) + '</div>';
+      groups[k].forEach(function (g) {
+        var t = g.t;
+        var seen = run() && run().seen && run().seen[ch.id + ":" + g.i];
+        h += '<div class="talkRow"><button class="talkTick' + (seen ? " on" : "") + '" data-act="seen" data-ch="' + ch.id + '" data-i="' + g.i + '" aria-label="Mark seen">' + (seen ? "✓" : "○") + '</button>' +
+          '<div style="flex:1"><div class="talkWho">' + esc(t.who) + (t.miss ? ' <span class="tag miss">Missable</span>' : "") + (t.verify ? ' <span class="tag verify">Verify</span>' : "") + '</div>' +
+          (t.sum ? '<div class="talkSum">' + esc(t.sum) + '</div>' : "") +
+          (t.trig ? '<div class="talkTrig">' + esc(t.trig) + '</div>' : "") +
+          '</div></div>';
+      });
+      h += '</div>';
+    });
+    h += '</details>';
+    return h;
+  }
+
+  function renderLore(ch) {
+    var h = "";
+    if (ch.lore && state.settings.lore) {
+      h += '<details class="loreBox"' + (state.ui.openLore === ch.id ? " open" : "") + '><summary class="loreSum">Lore</summary>' +
+        '<div class="loreBody">' + ch.lore.split(/\n\n+/).map(function (p) { return "<p>" + esc(p) + "</p>"; }).join("") + '</div></details>';
+    }
+    if (ch.trivia) {
+      h += '<details class="loreBox"><summary class="loreSum">Did you know</summary><div class="loreBody"><p>' + esc(ch.trivia) + '</p></div></details>';
+    }
+    return h;
+  }
+
 
   function openSheet(title, body) {
     document.getElementById("sheetTitle").textContent = title;
@@ -1044,7 +1124,13 @@
           '<span>' + esc(x.name) + '</span><span class="tiny dim">' + esc(modeName(x.mode)) + '</span></button>';
       });
       body += '<hr class="sep"><button class="btn gold wide" data-act="new-run">New run</button>' +
-        '<div class="row" style="gap:8px"><button class="btn wide" data-act="export">Export</button><button class="btn wide" data-act="import">Import</button></div>' +
+        '<div class="kicker" style="margin-top:14px">Content settings</div>' +
+        '<div class="row wrap" style="gap:6px">' +
+        [["lore", "Lore"], ["boss", "Boss quotes"], ["death", "Death quotes"], ["endings", "Endings"]].map(function (x) {
+          var on = state.settings[x[0]];
+          return '<button class="btn ' + (on ? "gold" : "") + '" data-act="toggle-setting" data-v="' + x[0] + '">' + x[1] + ': ' + (on ? "On" : "Off") + '</button>';
+        }).join("") + '</div>' +
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn wide" data-act="export">Export</button><button class="btn wide" data-act="import">Import</button></div>' +
         '<p class="tiny dim">Export writes a JSON file of every run. Import replaces everything on this device.</p>' +
         '</div>';
     } else {
@@ -1074,6 +1160,7 @@
       '<div><div class="kicker">' + esc(u.tier) + '-tier · ' + esc(u.cls) + '</div>' +
       '<h3 style="font-size:19px;margin:2px 0 4px">' + esc(u.name) + '</h3>' +
       '<div class="small muted">Joins: ' + esc(u.join) + (u.aff && u.aff !== "—" ? " · Affinity: " + esc(u.aff) : "") + '</div></div>' +
+      (u.bio ? '<p class="bioText">' + esc(u.bio) + '</p>' : "") +
       '<p style="font-size:13.5px;color:#C9D0DB">' + esc(u.note) + '</p>' +
       '<div class="card" style="background:var(--surface2)"><div class="kicker">Build</div><div class="small" style="margin-top:4px">' + esc(u.build) + '</div></div>' +
       '<div class="row" style="gap:10px;align-items:center"><div><div class="kicker">Level</div>' +
@@ -1088,6 +1175,13 @@
         u.promos.map(function (p) {
           return '<button class="btn ' + (r.promos[u.id] === p ? "gold" : "") + '" data-act="set-promo" data-u="' + u.id + '" data-v="' + esc(p) + '">' + esc(p) + '</button>';
         }).join("") + '</div></div>';
+    }
+    if (u.death) {
+      body += '<details class="loreBox"><summary class="loreSum">Death quote</summary><div class="loreBody"><p>' + esc(u.death) + '</p></div></details>';
+    }
+    if (u.endings && u.endings.length && state.settings.endings) {
+      body += '<details class="loreBox"><summary class="loreSum">Paired endings · ' + u.endings.length + '</summary><div class="loreBody">' +
+        u.endings.map(function (e) { return "<p>" + esc(e) + "</p>"; }).join("") + '</div></details>';
     }
     body += '</div>';
     openSheet(u.name, body);
@@ -1106,6 +1200,9 @@
     var body = '<div class="stack">' +
       '<div><div class="kicker">Support</div><h3 style="font-size:18px;margin:2px 0 4px">' + esc(ua.name) + " × " + esc(ub.name) + '</h3>' +
       '<div class="small muted">Starts at ' + p.start + ' points · +' + p.growth + ' per turn adjacent · C 80 / B 160 / A 240</div></div>' +
+      ((ua.theme || ub.theme) ? '<div class="small" style="color:#C9D0DB">' +
+        (ua.theme ? '<div><b>' + esc(ua.name) + ':</b> ' + esc(ua.theme) + '</div>' : '') +
+        (ub.theme ? '<div><b>' + esc(ub.name) + ':</b> ' + esc(ub.theme) + '</div>' : '') + '</div>' : '') +
       '<div class="card" style="background:var(--surface2)"><div class="kicker">Bonuses</div>' +
       '<div class="small" style="margin-top:4px">C: ' + fmtBonus(b1) + '</div>' +
       '<div class="small">A: ' + fmtBonus(b3) + '</div></div>' +
@@ -1440,6 +1537,27 @@
       case "supp-filter": state.ui.suppFilter = t.dataset.v; save(); render(); break;
       case "ex-filter": state.ui.exFilter = t.dataset.v; save(); render(); break;
       case "exploit": exploitSheet(+t.dataset.i); break;
+      case "seen": {
+        var sk = t.dataset.ch + ":" + t.dataset.i;
+        r.seen = r.seen || {};
+        if (r.seen[sk]) delete r.seen[sk]; else r.seen[sk] = true;
+        save(); render();
+        break;
+      }
+      case "jump-open":
+        state.ui.openLore = t.dataset.id;
+        state.ui.openTalks = t.dataset.id;
+        state.ui.sel = t.dataset.id;
+        state.ui.tab = "chapters";
+        closeSheet(); save(); render();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        break;
+      case "toggle-setting": {
+        var sv = t.dataset.v;
+        state.settings[sv] = !state.settings[sv];
+        save(); render();
+        break;
+      }
       case "unit":
         if (t.dataset.u) unitSheet(t.dataset.u);
         break;

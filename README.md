@@ -13,6 +13,10 @@ Built because these games silently delete content: gaidens expire on turn limits
 - **Per-item checkboxes** for recruits, villages, chests, notable drops, ruins and secret shops.
 - **Multiple isolated runs** with name, mode and difficulty, stored per game.
 - **Auto-advance** — closing a chapter moves the pin to the next one, opens it, and offers **Undo** in a toast.
+- **Talks & events** — every optional conversation, NPC/family talk, boss quote, event trigger and death quote, grouped by type with the trigger condition and a missable flag. A seen-tick is available but never affects progress.
+- **Lore** — long-form chapter lore, world history, and a "Did you know" snippet, collapsed by default.
+- **Character bios, death quotes and paired endings** on every unit sheet, plus support-chain themes in the support viewer.
+- **Settings** to hide lore, boss quotes, death quotes or endings independently.
 - **Gaiden offers** — when a side quest unlocks, a modal asks whether to play it or skip to the next story chapter.
 - **Catch-up** that marks earlier chapters as *assumed* instead of done, so the audit can ask you to confirm the important ones.
 - **Audit** listing unrecorded, assumed and permanently lost content.
@@ -69,6 +73,8 @@ This repo is already deployed. To rebuild from a fork:
 | `data-supports.js` | FE7 support chart (Serenes Forest) |
 | `data-fe8.js` | FE8 chapters, units, dungeons, exploits, strategy |
 | `data-fe8-supports.js` | FE8 support chart and affinities |
+| `data-lore-fe7.js` | FE7 talks, lore, bios, endings |
+| `data-lore-fe8.js` | FE8 talks, lore, bios, endings, dungeon floor lore |
 | `data-fe9.js` | Path of Radiance placeholder |
 | `sw.js` | Offline cache. **Bump `CACHE` after editing content.** |
 | `manifest.json` | Home-screen metadata |

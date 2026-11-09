@@ -332,6 +332,22 @@ table.plain td{padding:7px 8px;border-bottom:1px solid rgba(42,49,60,.6);vertica
 .exCard ol{margin:8px 0 0;padding-left:19px;color:#C9D0DB;font-size:13px;line-height:1.55}
 .exCard li{margin-bottom:5px}
 .exCard .warn{margin-top:8px;font-size:12px;color:#DFAE5C}
+.loreBox{border:1px solid var(--line);border-radius:10px;background:var(--surface2);margin-top:10px;overflow:hidden}
+.loreSum{cursor:pointer;padding:10px 12px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:650;list-style:none}
+.loreSum::-webkit-details-marker{display:none}
+.loreBox[open] .loreSum{color:var(--gold)}
+.loreBody{padding:0 12px 12px;font-size:13.5px;color:#C9D0DB;line-height:1.6}
+.loreBody p{margin:0 0 8px}
+.loreBody p:last-child{margin-bottom:0}
+.bioText{font-size:13px;color:var(--muted);line-height:1.55;margin:6px 0 10px}
+.talkGroup{padding:0 12px 4px}
+.talkH{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:8px 0 4px}
+.talkRow{display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(42,49,60,.5)}
+.talkTick{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--dim);font-size:11px;display:grid;place-items:center;flex:0 0 auto;margin-top:1px}
+.talkTick.on{background:var(--ok);border-color:var(--ok);color:#08120C}
+.talkWho{font-size:13px;font-weight:550}
+.talkSum{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:1px}
+.talkTrig{font-size:11px;color:var(--dim);margin-top:2px}
 
 .empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:13.5px}
 .empty b{display:block;color:var(--text);margin-bottom:4px;font-size:15px}
