@@ -1232,8 +1232,12 @@
     document.getElementById("sheetTitle").textContent = title;
     document.getElementById("sheetBody").innerHTML = body;
     sheet.hidden = false;
+    document.body.classList.add("sheet-open");
   }
-  function closeSheet() { sheet.hidden = true; }
+  function closeSheet() {
+    sheet.hidden = true;
+    document.body.classList.remove("sheet-open");
+  }
 
   function settingsSheet() {
     var s = state.settings;
