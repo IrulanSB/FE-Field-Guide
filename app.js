@@ -46,12 +46,12 @@
   if (state.settings.steals === undefined) state.settings.steals = false;
   if (state.settings.turnByTurn === undefined) state.settings.turnByTurn = false;
   if (!state.settings.planStyle) state.settings.planStyle = "completionist";
-  if (!state.settingsVersion || state.settingsVersion < 2) {
+  if (!state.settingsVersion || state.settingsVersion < 3) {
     state.settings.strategy = false;
     state.settings.steals = false;
-    state.settings.turnByTurn = false;
+    state.settings.turnByTurn = true;
     state.settings.planStyle = "completionist";
-    state.settingsVersion = 2;
+    state.settingsVersion = 3;
   }
   migrate();
   applyLore(window.FE7, window.FE7_LORE, window.FE7_UNIT_LORE);
@@ -1150,7 +1150,7 @@
   function stealsFor(ch) {
     return (ch.items || []).filter(function (it) { return /steal/i.test(it.d || ""); });
   }
-  function isKeyItem(t) { return /Seal|Card|Boots|Crest|Ring|Whip|Bolt|Contract|Robe|Drops|Gem|Blade|Sword|Lance|Axe|Bow/.test(t); }
+  function isKeyItem(t) { return /Seal|Card|Boots|Crest|Ring|Whip|Bolt|Contract|Robe|Drops|Gem|Blade|Sword|Lance|Axe|Bow|Shield|Tome|Staff/.test(t); }
 
   function deriveBring(ch) {
     var out = ["Healer"];
@@ -1177,15 +1177,9 @@
   }
   function planFor(ch, r) {
     var p = ch.plan || {};
-    var style = state.settings.planStyle || "completionist";
-    var generic = {
-      efficient: "Efficient: clear the map, take the loot on the way, do not reset for a perfect turn.",
-      ltc: "Low turns: move the lord straight for the objective and skip optional loot unless it is on the path.",
-      completionist: "Completionist: every village, chest, recruit, steal and side objective before you close the chapter."
-    };
     return {
-      style: style,
-      styleNote: p[style] || generic[style] || "",
+      style: "completionist",
+      styleNote: p.completionist || "Completionist: every village, chest, recruit, steal and side objective before you close the chapter.",
       deploy: p.deploy || ch.deploy || "",
       bring: p.bring || deriveBring(ch),
       steps: p.steps || deriveSteps(ch, r),
@@ -1196,16 +1190,52 @@
     };
   }
 
+  function fullClearList(ch, r) {
+    var kinds = { village: "Villages", chest: "Chests", recruit: "Recruits", item: "Found", ruin: "Ruins", shop: "Shops" };
+    var groups = {};
+    branchFilter(ch, r).forEach(function (x) {
+      if (!kinds[x.it.k]) return;
+      (groups[x.it.k] = groups[x.it.k] || []).push({ it: x.it, i: x.i });
+    });
+    return groups;
+  }
+
+  function supportIdeas(r) {
+    var roster = Object.keys(r.roster).filter(function (k) { return r.roster[k] === "core" || r.roster[k] === "bench"; });
+    if (roster.length < 2) return [];
+    var out = [];
+    var list = supportsFor();
+    for (var i = 0; i < list.length && out.length < 2; i++) {
+      var p = list[i];
+      if (roster.indexOf(p.a) < 0 || roster.indexOf(p.b) < 0) continue;
+      if (r.supports && r.supports[pairKey(p.a, p.b)]) continue;
+      var ua = unitById(p.a), ub = unitById(p.b);
+      if (ua && ub) out.push(ua.name + " × " + ub.name);
+    }
+    return out;
+  }
+
   function renderPlan(ch, r) {
     if (!state.settings.strategy) return "";
     if (!ch.obj && !ch.items.length) return "";
     var p = planFor(ch, r);
-    var label = p.style === "ltc" ? "Low turns" : p.style === "completionist" ? "Completionist" : "Efficient";
-    var h = '<details class="loreBox"' + (state.ui.openPlan === ch.id ? " open" : "") + '><summary class="loreSum">Optimal plan · ' + label + '</summary><div class="loreBody">';
+    var h = '<details class="loreBox"' + (state.ui.openPlan === ch.id ? " open" : "") + '><summary class="loreSum">Optimal plan · Completionist</summary><div class="loreBody">';
     if (p.styleNote) h += '<p class="planStyle">' + esc(p.styleNote) + '</p>';
+    var groups = fullClearList(ch, r);
+    var groupKeys = Object.keys(groups);
+    if (groupKeys.length) {
+      h += '<div class="planSec"><b>Full clear</b><ul>';
+      groupKeys.forEach(function (k) {
+        groups[k].forEach(function (x) {
+          var done = isChecked(r, ch, x.i);
+          h += '<li>' + (done ? "✓ " : "○ ") + '<span class="dim">' + esc(({ village: "Village", chest: "Chest", recruit: "Recruit", item: "Found", ruin: "Ruins", shop: "Shop" })[k]) + ':</span> ' + esc(x.it.t) + '</li>';
+        });
+      });
+      h += '</ul></div>';
+    }
     if (p.deploy) h += '<p><b>Deploy:</b> ' + esc(p.deploy) + '</p>';
     if (p.bring) h += '<p><b>Bring:</b> ' + esc(p.bring) + '</p>';
-    if (p.steps && p.steps.length && state.settings.turnByTurn) {
+    if (p.steps && p.steps.length) {
       h += '<div class="planSec"><b>Steps</b><ol>' + p.steps.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ol></div>';
     }
     if (p.threats && p.threats.length) {
@@ -1213,6 +1243,15 @@
     }
     if (p.boss) h += '<p><b>Boss:</b> ' + esc(p.boss) + '</p>';
     if (p.exp) h += '<p><b>EXP:</b> ' + esc(p.exp) + '</p>';
+    var priorities = branchFilter(ch, r).filter(function (x) { return isKeyItem(x.it.t) && !isChecked(r, ch, x.i); }).map(function (x) { return x.it.t; });
+    if (priorities.length) h += '<p><b>Priorities:</b> ' + esc(priorities.slice(0, 6).join(" · ")) + '</p>';
+    if (turnLimitApplies(ch, r)) {
+      h += '<p><b>Turn target:</b> ' + esc("finish within " + ch.turn.limit + " turns for " + ch.turn.unlocks + ".") + '</p>';
+    } else {
+      h += '<p><b>Turn target:</b> no deadline on this map.</p>';
+    }
+    var ideas = supportIdeas(r);
+    if (ideas.length) h += '<p><b>Supports to build:</b> ' + esc(ideas.join(" · ")) + '</p>';
     var st = stealsFor(ch);
     if (state.settings.steals && st.length) {
       h += '<div class="planSec"><b>Steal before you kill</b><div class="tiny muted" style="margin:2px 0 5px">Steal works when your Speed is higher than the target\'s and your Constitution covers the item\'s weight. Promoted thieves count.</div><ul>';
@@ -1253,16 +1292,11 @@
 
   function settingsSheet() {
     var s = state.settings;
-    var toggles = [["lore", "Lore"], ["boss", "Boss quotes"], ["death", "Death quotes"], ["endings", "Endings"], ["strategy", "Optimal plans"], ["steals", "Steal list"], ["turnByTurn", "Turn-by-turn steps"]];
+    var toggles = [["lore", "Lore"], ["boss", "Boss quotes"], ["death", "Death quotes"], ["endings", "Endings"], ["strategy", "Optimal plans"], ["steals", "Steal list"]];
     var body = '<div class="stack"><p class="small muted" style="margin:0">Global settings — one set for every run and both games.</p><div class="row wrap" style="gap:6px">' +
       toggles.map(function (x) {
         var on = s[x[0]];
         return '<button class="btn ' + (on ? "gold" : "") + '" data-act="toggle-setting" data-v="' + x[0] + '">' + x[1] + ': ' + (on ? "On" : "Off") + '</button>';
-      }).join("") + '</div>' +
-      '<div class="kicker" style="margin-top:10px">Plan style</div>' +
-      '<div class="row wrap" style="gap:6px">' +
-      [["efficient", "Efficient"], ["ltc", "Low turns"], ["completionist", "Completionist"]].map(function (x) {
-        return '<button class="btn ' + (s.planStyle === x[0] ? "gold" : "") + '" data-act="set-style" data-v="' + x[0] + '">' + x[1] + '</button>';
       }).join("") + '</div></div>';
     openSheet("Settings", body);
   }
