@@ -1296,12 +1296,11 @@
 
   function renderPlan(ch, r) {
     if (!state.settings.spoilers || !state.settings.plans) {
-      return '<div class="planBlock"><div class="loreBody"><p class="dim" style="margin:0">Spoilers hidden — turn them on in Settings to show the optimal plan.</p></div></div>';
+      return '<div class="planBlock"><div class="planHead">Plan</div><div class="loreBody"><p class="dim" style="margin:0">Spoilers hidden — turn them on in Settings to show the plan.</p></div></div>';
     }
     if (!ch.obj && !ch.items.length) return "";
     var p = planFor(ch, r);
-    var h = '<div class="planBlock"><div class="planHead">Optimal plan · Completionist</div><div class="loreBody">';
-    if (p.styleNote) h += '<p class="planStyle">' + esc(p.styleNote) + '</p>';
+    var h = '<div class="planBlock"><div class="planHead">Plan</div><div class="loreBody">';
     if (p.deploy) h += '<p><b>Deploy:</b> ' + esc(p.deploy) + '</p>';
     if (p.steps && p.steps.length) {
       h += '<div class="planSec"><b>Steps</b><ol>' + p.steps.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ol></div>';

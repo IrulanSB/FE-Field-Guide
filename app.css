@@ -360,8 +360,8 @@ body.sheet-open .searchPanel{z-index:70}
 .talkSum{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:1px}
 .talkTrig{font-size:11px;color:var(--dim);margin-top:2px}
 .planStyle{background:var(--goldSoft);border-left:2px solid var(--gold);padding:8px 10px;border-radius:6px;color:#E7C77E}
-.planBlock{border:1px solid rgba(200,162,74,.35);background:linear-gradient(180deg,rgba(200,162,74,.10),rgba(200,162,74,.03));border-radius:12px;padding:14px;margin:14px 0}
-.planHead{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:8px}
+.planBlock{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:14px;margin:14px 0}
+.planHead{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px}
 .fcList{list-style:none;padding:0;margin:0}
 .fcList li{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid rgba(42,49,60,.6);font-size:13px;flex-wrap:wrap}
 .fcList li:last-child{border-bottom:0}
