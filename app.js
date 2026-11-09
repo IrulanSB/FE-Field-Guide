@@ -42,10 +42,17 @@
   if (state.settings.boss === undefined) state.settings.boss = false;
   if (state.settings.death === undefined) state.settings.death = false;
   if (state.settings.endings === undefined) state.settings.endings = false;
-  if (state.settings.strategy === undefined) state.settings.strategy = true;
-  if (state.settings.steals === undefined) state.settings.steals = true;
-  if (state.settings.turnByTurn === undefined) state.settings.turnByTurn = true;
-  if (!state.settings.planStyle) state.settings.planStyle = "efficient";
+  if (state.settings.strategy === undefined) state.settings.strategy = false;
+  if (state.settings.steals === undefined) state.settings.steals = false;
+  if (state.settings.turnByTurn === undefined) state.settings.turnByTurn = false;
+  if (!state.settings.planStyle) state.settings.planStyle = "completionist";
+  if (!state.settingsVersion || state.settingsVersion < 2) {
+    state.settings.strategy = false;
+    state.settings.steals = false;
+    state.settings.turnByTurn = false;
+    state.settings.planStyle = "completionist";
+    state.settingsVersion = 2;
+  }
   migrate();
   applyLore(window.FE7, window.FE7_LORE, window.FE7_UNIT_LORE);
   applyLore(window.FE8, window.FE8_LORE, window.FE8_UNIT_LORE);
@@ -1170,10 +1177,15 @@
   }
   function planFor(ch, r) {
     var p = ch.plan || {};
-    var style = state.settings.planStyle || "efficient";
+    var style = state.settings.planStyle || "completionist";
+    var generic = {
+      efficient: "Efficient: clear the map, take the loot on the way, do not reset for a perfect turn.",
+      ltc: "Low turns: move the lord straight for the objective and skip optional loot unless it is on the path.",
+      completionist: "Completionist: every village, chest, recruit, steal and side objective before you close the chapter."
+    };
     return {
       style: style,
-      styleNote: p[style] || "",
+      styleNote: p[style] || generic[style] || "",
       deploy: p.deploy || ch.deploy || "",
       bring: p.bring || deriveBring(ch),
       steps: p.steps || deriveSteps(ch, r),
@@ -1193,7 +1205,7 @@
     if (p.styleNote) h += '<p class="planStyle">' + esc(p.styleNote) + '</p>';
     if (p.deploy) h += '<p><b>Deploy:</b> ' + esc(p.deploy) + '</p>';
     if (p.bring) h += '<p><b>Bring:</b> ' + esc(p.bring) + '</p>';
-    if (p.steps && p.steps.length) {
+    if (p.steps && p.steps.length && state.settings.turnByTurn) {
       h += '<div class="planSec"><b>Steps</b><ol>' + p.steps.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ol></div>';
     }
     if (p.threats && p.threats.length) {
