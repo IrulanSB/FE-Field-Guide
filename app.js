@@ -74,7 +74,8 @@
     return {
       id: uid(), name: name || "New run", mode: mode, diff: diff || "Normal", game: g,
       created: Date.now(), chapterId: first ? first.id : "",
-      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}, levels: {}, promos: {}, seen: {}
+      checked: {}, turns: {}, notes: {}, roster: {}, team: [], boosters: {}, branches: {}, reached: {}, supports: {}, levels: {}, promos: {}, seen: {},
+      playedModes: [mode]
     };
   }
   function migrate() {
@@ -84,6 +85,14 @@
       r.roster = r.roster || {}; r.team = r.team || []; r.boosters = r.boosters || {};
       r.branches = r.branches || {}; r.reached = r.reached || {}; r.supports = r.supports || {};
       r.levels = r.levels || {}; r.promos = r.promos || {}; r.seen = r.seen || {};
+      if (!r.playedModes || !r.playedModes.length) {
+        r.playedModes = [r.mode];
+        if (r.game === "fe7" && r.mode === "eliwood") {
+          var lynIds = (window.FE7.order.lyn || []);
+          var playedLyn = Object.keys(r.checked).some(function (k) { return lynIds.indexOf(k.split(":")[0]) >= 0; });
+          if (playedLyn) r.playedModes = ["lyn", "eliwood"];
+        }
+      }
     });
   }
   function run() {
@@ -144,7 +153,10 @@
 
   function campaignBars(r) {
     if (DATA.id !== "fe7") return "";
-    var modes = r.mode === "hector" ? ["hector"] : ["lyn", "eliwood"];
+    var order = ["lyn", "eliwood", "hector"];
+    var modes = (r.playedModes && r.playedModes.length ? r.playedModes : [r.mode]).filter(function (m) { return order.indexOf(m) >= 0; });
+    if (!modes.length) modes = [r.mode];
+    modes.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
     var rows = "";
     modes.forEach(function (m) {
       var list = chaptersFor(m);
@@ -1589,6 +1601,8 @@
         if (lv && lv.value) r.levels["nils"] = parseInt(lv.value, 10);
         Object.keys(r.roster).forEach(function (u) { if (r.roster[u] === "dead") r.roster[u] = "bench"; });
         r.mode = "eliwood"; r.chapterId = "c11"; r.complete = false;
+        r.playedModes = r.playedModes || ["lyn"];
+        if (r.playedModes.indexOf("eliwood") < 0) r.playedModes.push("eliwood");
         state.ui.sel = "c11"; state.ui.tab = "chapters";
         save(); closeSheet(); render();
         toast("Eliwood Mode begins");

@@ -1,5 +1,5 @@
 /* Offline cache. Bump CACHE when content changes. */
-const CACHE = "fe7-fg-v33";
+const CACHE = "fe7-fg-v34";
 const ASSETS = [
   "./",
   "index.html",
