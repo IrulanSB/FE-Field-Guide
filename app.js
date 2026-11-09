@@ -1191,7 +1191,9 @@
   function stealsFor(ch) {
     return (ch.items || []).filter(function (it) { return /steal/i.test(it.d || ""); });
   }
-  function isKeyItem(t) { return /seal|card|boots|crest|ring|whip|bolt|contract|robe|drops|gem|blade|sword|lance|axe|bow|shield|tome|staff|book|icon|wings|talisman/i.test(t); }
+  function isKeyItem(t) { return /seal|card|boots|crest|ring|whip|bolt|contract|robe|drops|gem|shield|tome|staff|book|icon|wings|talisman/i.test(t); }
+  function isRareItem(t) { return /killer|silver|brave|rune|regal|divine|aura|luce|excalibur|gespenst|basilikos|rex hasta|rienfleche|sol katti|durandal|armads|forblaze|aureola|legendary/i.test(t); }
+  function isPriorityItem(t) { return isKeyItem(t) || isRareItem(t); }
 
   function deriveBring(ch) {
     var out = ["Healer"];
@@ -1318,7 +1320,23 @@
     var ideas = supportIdeas(r);
     if (ideas.length) h += '<p><b>Supports to build:</b> ' + esc(ideas.join(" · ")) + '</p>';
     var st = stealsFor(ch);
-    if (state.settings.steals && st.length) {
+    var sd = ((window.STEALDATA || {})[DATA.id === "fe8" ? "fe8" : "fe7"] || {})[ch.id] || [];
+    if (state.settings.steals && sd.length) {
+      var sorted = sd.slice().sort(function (a, b) {
+        var ap = a.items.some(isPriorityItem) ? 0 : 1, bp = b.items.some(isPriorityItem) ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return (a.spd || 99) - (b.spd || 99);
+      });
+      h += '<div class="planSec"><b>Steal before you kill · ' + sd.length + ' carrier' + (sd.length === 1 ? "" : "s") + '</b>' +
+        '<div class="tiny muted" style="margin:2px 0 5px">Enemy Speed is listed. Your thief needs a higher Speed and enough Constitution for the item weight.</div><ul>';
+      sorted.slice(0, 12).forEach(function (e) {
+        h += '<li><b>' + esc(e.n) + '</b> <span class="dim">' + esc(e.c) + '</span>' +
+          (e.spd !== null ? ' · Spd ' + e.spd : "") + ' — ' + esc(e.items.join(", ")) +
+          (e.items.some(isPriorityItem) ? ' <span class="tag miss">Priority</span>' : '') + '</li>';
+      });
+      if (sorted.length > 12) h += '<li class="dim">…and ' + (sorted.length - 12) + ' more carriers.</li>';
+      h += '</ul></div>';
+    } else if (state.settings.steals && st.length) {
       h += '<div class="planSec"><b>Steal before you kill</b><div class="tiny muted" style="margin:2px 0 5px">Steal works when your Speed is higher than the target\'s and your Constitution covers the item\'s weight. Promoted thieves count.</div><ul>';
       st.forEach(function (it) {
         h += '<li>' + esc(it.t) + ' — ' + esc(it.d.replace(/^Steal from\s*/i, "from ")) + (isKeyItem(it.t) ? ' <span class="tag miss">Priority</span>' : '') + '</li>';
@@ -1456,7 +1474,17 @@
       body += '<div class="promoGains">' + promos.map(function (p) {
         var key = p.replace(/\s*\(.*\)$/, "");
         var info = table[key];
-        return '<div class="tiny muted"><b style="color:var(--text)">' + esc(p) + '</b>' + (info ? ' · ' + esc(info.g) + (info.w ? ' · ' + esc(info.w) : '') : '') + '</div>';
+        var caps = ((window.CAPDATA || {})[DATA.id] || {})[key];
+        if (!caps && key === "Wyvern Knight") caps = ((window.CAPDATA || {})[DATA.id] || {})["Wyvern Knight (The Sacred Stones)"];
+        var capText = "";
+        if (caps) {
+          var parts = [];
+          ["hp", "str", "skl", "spd", "luck", "def", "res"].forEach(function (k) {
+            if (caps[k] !== undefined) parts.push(({ hp: "HP", str: "Str", skl: "Skl", spd: "Spd", luck: "Lck", def: "Def", res: "Res" })[k] + " " + caps[k]);
+          });
+          if (parts.length) capText = ' · Caps: ' + parts.join(" / ");
+        }
+        return '<div class="tiny muted"><b style="color:var(--text)">' + esc(p) + '</b>' + (info ? ' · ' + esc(info.g) + (info.w ? ' · ' + esc(info.w) : '') : '') + esc(capText) + '</div>';
       }).join("") + '</div>';
       if (/Journeyman|Recruit|Pupil/.test(u.cls)) {
         body += '<div class="small" style="color:#DFAE5C;margin-top:4px">Trainee: first promotion at level 10 (trainee seal or automatic), then a normal seal at level 10+.</div>';

@@ -1,5 +1,5 @@
 /* Offline cache. Bump CACHE when content changes. */
-const CACHE = "fe7-fg-v40";
+const CACHE = "fe7-fg-v42";
 const ASSETS = [
   "./",
   "index.html",
@@ -14,6 +14,8 @@ const ASSETS = [
   "data-lore-fe8.js",
   "data-plans.js",
   "data-promo.js",
+  "data-steals.js",
+  "data-caps.js",
   "manifest.json",
   "icon.svg",
   "icon-180.png"
